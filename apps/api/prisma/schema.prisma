@@ -1,0 +1,396 @@
+// Sourcemark data model. Every org-owned row carries orgId, and every query in the API is
+// scoped through src/db/scoped.ts so one organisation can never read another's data.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum Role {
+  CREATOR
+  REVIEWER
+  APPROVER
+  ADMIN
+}
+
+enum ContentState {
+  DRAFT
+  CHECKING
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum TransitionAction {
+  SUBMIT
+  RESOLVE
+  REQUEST_CHANGES
+  APPROVE
+  REJECT
+  REVISE
+}
+
+enum GuidelineStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum RuleType {
+  banned_term
+  terminology
+  all_caps
+  punctuation
+  long_sentence
+  required_disclosure
+}
+
+enum FactKind {
+  money
+  quantity
+  name
+  date
+  claim
+}
+
+enum Severity {
+  high
+  medium
+  low
+}
+
+enum FindingKind {
+  violation
+  needs_human_check
+}
+
+enum FindingStatus {
+  OPEN
+  DISPUTED
+  CLOSED
+  SUPERSEDED
+}
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ResponseAction {
+  ACCEPT
+  EDIT
+  DISPUTE
+}
+
+model User {
+  id        String   @id // Supabase Auth user id (JWT "sub")
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  members   Member[]
+}
+
+model Organisation {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  members   Member[]
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  roles     Role[]
+  createdAt DateTime @default(now())
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+}
+
+// Per-organisation counters for citable codes (R-1, F-1, guideline prefixes G, G2, ...).
+model OrgCounter {
+  orgId String
+  kind  String
+  value Int    @default(0)
+
+  @@id([orgId, kind])
+}
+
+model Guideline {
+  id        String             @id @default(cuid())
+  orgId     String
+  title     String
+  prefix    String // clause codes are "<prefix>-<number>", stable across versions
+  createdAt DateTime           @default(now())
+  versions  GuidelineVersion[]
+
+  @@unique([orgId, prefix])
+  @@index([orgId])
+}
+
+model GuidelineVersion {
+  id             String          @id @default(cuid())
+  orgId          String
+  guidelineId    String
+  number         Int
+  status         GuidelineStatus @default(DRAFT)
+  sourceFileName String?
+  rawText        String
+  createdById    String
+  createdAt      DateTime        @default(now())
+  publishedAt    DateTime?
+
+  guideline Guideline @relation(fields: [guidelineId], references: [id], onDelete: Cascade)
+  clauses   Clause[]
+
+  @@unique([guidelineId, number])
+  @@index([orgId, status])
+}
+
+// The HNSW index on "embedding" is created in migration *_clause_embedding_index. Prisma cannot
+// declare HNSW indexes, so it will add `DROP INDEX "Clause_embedding_hnsw"` to future migrations:
+// delete that line from any generated migration.
+model Clause {
+  id             String                      @id @default(cuid())
+  orgId          String
+  versionId      String
+  code           String
+  heading        String?
+  text           String
+  position       Int
+  embedding      Unsupported("vector(768)")?
+  embeddingModel String?
+
+  version GuidelineVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, code])
+  @@index([orgId])
+}
+
+model Rule {
+  id         String   @id @default(cuid())
+  orgId      String
+  code       String
+  type       RuleType
+  severity   Severity
+  clauseCode String?
+  message    String
+  config     Json
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([orgId, code])
+}
+
+model Fact {
+  id         String    @id @default(cuid())
+  orgId      String
+  code       String
+  subject    String
+  aliases    String[]
+  attribute  String
+  kind       FactKind
+  value      String
+  unit       String?
+  validFrom  DateTime  @db.Date
+  validUntil DateTime? @db.Date
+  source     String?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  @@unique([orgId, code])
+  @@index([orgId, subject, attribute])
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  type      String
+  url       String?
+  colors    String[]
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+}
+
+model ContentItem {
+  id        String       @id @default(cuid())
+  orgId     String
+  title     String
+  channel   String
+  state     ContentState @default(DRAFT)
+  aiChecks  Boolean      @default(true) // false: rule checks only, nothing is sent to the LLM
+  authorId  String // Member id
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  versions ContentVersion[]
+  runs     AnalysisRun[]
+  findings Finding[]
+  comments Comment[]
+  events   ApprovalEvent[]
+
+  @@index([orgId, state])
+}
+
+model ContentVersion {
+  id             String   @id @default(cuid())
+  orgId          String
+  contentItemId  String
+  number         Int
+  body           String
+  sourceFileName String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  contentItem ContentItem   @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  runs        AnalysisRun[]
+
+  @@unique([contentItemId, number])
+}
+
+model AnalysisRun {
+  id            String    @id @default(cuid())
+  orgId         String
+  contentItemId String
+  versionId     String
+  status        RunStatus @default(RUNNING)
+  aiStatus      String?
+  aiError       String?
+  model         String?
+  stats         Json?
+  error         String?
+  durationMs    Int?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  contentItem ContentItem    @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  version     ContentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  findings    Finding[]
+  rewrites    Rewrite[]
+
+  @@index([contentItemId, createdAt])
+}
+
+model Finding {
+  id                String        @id @default(cuid())
+  orgId             String
+  runId             String
+  contentItemId     String
+  versionId         String
+  fingerprint       String
+  kind              FindingKind
+  category          String
+  severity          Severity
+  origins           String[]
+  spanStart         Int?
+  spanEnd           Int?
+  quote             String
+  explanation       String
+  sourceType        String?
+  sourceCode        String?
+  sourceClauseCode  String?
+  sourceText        String?
+  confidence        Float
+  fixStart          Int?
+  fixEnd            Int?
+  fixReplacement    String?
+  status            FindingStatus @default(OPEN)
+  closedInVersionId String?
+  carriedFromId     String?
+  createdAt         DateTime      @default(now())
+
+  run         AnalysisRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  contentItem ContentItem       @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  carriedFrom Finding?          @relation("Carried", fields: [carriedFromId], references: [id])
+  carriedTo   Finding[]         @relation("Carried")
+  responses   FindingResponse[]
+
+  @@index([contentItemId, status])
+  @@index([orgId, sourceCode])
+}
+
+model Rewrite {
+  id           String   @id @default(cuid())
+  orgId        String
+  runId        String
+  key          String
+  start        Int
+  end          Int
+  original     String
+  text         String
+  fingerprints String[]
+
+  run AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, key])
+}
+
+model FindingResponse {
+  id         String         @id @default(cuid())
+  orgId      String
+  findingId  String
+  memberId   String
+  action     ResponseAction
+  reason     String?
+  editedText String?
+  createdAt  DateTime       @default(now())
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id            String   @id @default(cuid())
+  orgId         String
+  contentItemId String
+  versionId     String?
+  findingId     String?
+  authorId      String
+  body          String
+  createdAt     DateTime @default(now())
+
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+model ApprovalEvent {
+  id            String           @id @default(cuid())
+  orgId         String
+  contentItemId String
+  versionId     String
+  action        TransitionAction
+  fromState     ContentState
+  toState       ContentState
+  actorId       String
+  note          String?
+  createdAt     DateTime         @default(now())
+
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  orgId      String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  data       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, createdAt])
+}

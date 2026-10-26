@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "clause_code": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "banned_term",
+              "terminology",
+              "all_caps",
+              "punctuation",
+              "long_sentence",
+              "required_disclosure"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "clause_code",
+          "type",
+          "severity",
+          "message",
+          "config"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "suggestions"
+  ],
+  "additionalProperties": false
+}

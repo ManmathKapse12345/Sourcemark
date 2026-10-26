@@ -1,0 +1,18 @@
+{
+  "name": "sourcemark",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/contract && npm run build -w apps/api",
+    "dev:api": "npm run build -w packages/contract && npm run dev -w apps/api",
+    "test": "npm run build -w packages/contract && npm test -w packages/contract && npm test -w apps/api",
+    "contract:export": "npm run build -w packages/contract && npm run export -w packages/contract",
+    "db:up": "docker compose up -d db",
+    "db:migrate": "npm run migrate -w apps/api",
+    "db:seed": "npm run seed -w apps/api",
+    "token": "npm run token -w apps/api --"
+  }
+}

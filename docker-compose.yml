@@ -1,0 +1,45 @@
+# Local development: Postgres with pgvector, plus the two backend services.
+# `docker compose up -d db` is enough when running the services from source.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: sourcemark
+      POSTGRES_PASSWORD: sourcemark
+      POSTGRES_DB: sourcemark
+    ports:
+      - "5434:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sourcemark"]
+      interval: 2s
+      retries: 20
+
+  analysis:
+    build: ./services/analysis
+    env_file: services/analysis/.env
+    environment:
+      DATABASE_URL: postgresql://sourcemark:sourcemark@db:5432/sourcemark
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: apps/api/.env
+    environment:
+      DATABASE_URL: postgresql://sourcemark:sourcemark@db:5432/sourcemark
+      ANALYSIS_URL: http://analysis:8000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dbdata:

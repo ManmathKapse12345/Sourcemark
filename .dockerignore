@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+**/.env
+services/analysis/.venv
+eval/.cache
+eval/results
+.git

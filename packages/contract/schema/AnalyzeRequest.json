@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string"
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "website",
+            "instagram",
+            "creator_post",
+            "linkedin",
+            "x",
+            "youtube",
+            "email",
+            "print",
+            "press_release",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "text",
+        "channel"
+      ],
+      "additionalProperties": false
+    },
+    "brand_kit": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "banned_term",
+                  "terminology",
+                  "all_caps",
+                  "punctuation",
+                  "long_sentence",
+                  "required_disclosure"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "clause_code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "config": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "code",
+              "type",
+              "severity",
+              "clause_code",
+              "message",
+              "config"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "attribute": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "money",
+                  "quantity",
+                  "name",
+                  "date",
+                  "claim"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "valid_from": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "valid_until": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "subject",
+              "aliases",
+              "attribute",
+              "kind",
+              "value",
+              "unit",
+              "valid_from",
+              "valid_until",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "clauses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "heading": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "heading",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "rules",
+        "facts",
+        "clauses"
+      ],
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "ai": {
+          "type": "boolean"
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ai",
+        "as_of"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "org_id",
+    "content",
+    "brand_kit",
+    "options"
+  ],
+  "additionalProperties": false
+}

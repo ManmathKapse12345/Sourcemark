@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "texts": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "task": {
+      "type": "string",
+      "enum": [
+        "document",
+        "query"
+      ]
+    }
+  },
+  "required": [
+    "texts",
+    "task"
+  ],
+  "additionalProperties": false
+}

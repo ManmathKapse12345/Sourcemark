@@ -1,0 +1,56 @@
+{
+  "findings": [
+    {
+      "fingerprint": "3f2a9c0d1e4b5a6c",
+      "kind": "violation",
+      "category": "claim",
+      "severity": "high",
+      "origins": ["rule", "ai"],
+      "span": { "start": 28, "end": 35 },
+      "quote": "MIRACLE",
+      "explanation": "\"MIRACLE\" is a banned term. Hype words promise results beyond what is tested.",
+      "source": {
+        "type": "rule",
+        "code": "R-1",
+        "clause_code": "G-3.1",
+        "text": "Do not describe any product as a miracle, magic, instant or a cure, or use similar language that promises results beyond what is tested."
+      },
+      "confidence": 1,
+      "fix": null
+    },
+    {
+      "fingerprint": "9b8a7c6d5e4f3a2b",
+      "kind": "needs_human_check",
+      "category": "tone",
+      "severity": "low",
+      "origins": ["ai"],
+      "span": null,
+      "quote": "",
+      "explanation": "The tone may be too promotional, but no approved guideline was found to support this.",
+      "source": null,
+      "confidence": 0.4,
+      "fix": null
+    }
+  ],
+  "rewrites": [
+    {
+      "id": "rw-0",
+      "start": 0,
+      "end": 52,
+      "original": "Our Calm Barrier Cream is a MIRACLE, now just ₹499!!",
+      "text": "Calm Barrier Moisturiser keeps dry skin comfortable, now ₹549.",
+      "finding_fingerprints": ["3f2a9c0d1e4b5a6c"]
+    }
+  ],
+  "ai_status": "ok",
+  "ai_error": null,
+  "model": "gemini-2.5-flash",
+  "stats": {
+    "rule_findings": 4,
+    "ai_findings": 2,
+    "ai_downgraded": 1,
+    "ai_dropped_unanchored": 0,
+    "merged": 1,
+    "duration_ms": 1830
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "org_id": "org_demo",
+  "content": {
+    "text": "Our Calm Barrier Cream is a MIRACLE, now just ₹499!!",
+    "channel": "instagram"
+  },
+  "brand_kit": {
+    "rules": [
+      {
+        "code": "R-1",
+        "type": "banned_term",
+        "severity": "high",
+        "clause_code": "G-3.1",
+        "message": "Hype words promise results beyond what is tested.",
+        "config": { "terms": ["miracle", "magic", "cure", "cures"], "replacement": null }
+      },
+      {
+        "code": "R-4",
+        "type": "terminology",
+        "severity": "high",
+        "clause_code": "G-2.1",
+        "message": "Use the approved product name.",
+        "config": { "preferred": "Calm Barrier Moisturiser", "variants": ["Calm Barrier Cream"] }
+      }
+    ],
+    "facts": [
+      {
+        "code": "F-2",
+        "subject": "Calm Barrier Moisturiser",
+        "aliases": [],
+        "attribute": "price",
+        "kind": "money",
+        "value": "549",
+        "unit": "INR",
+        "valid_from": "2026-07-01",
+        "valid_until": null,
+        "source": "Price list, July 2026"
+      }
+    ],
+    "clauses": [
+      {
+        "code": "G-3.1",
+        "heading": "Claims",
+        "text": "Do not describe any product as a miracle, magic, instant or a cure, or use similar language that promises results beyond what is tested."
+      }
+    ]
+  },
+  "options": { "ai": false, "as_of": "2026-10-26" }
+}
