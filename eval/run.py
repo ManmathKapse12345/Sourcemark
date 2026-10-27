@@ -53,7 +53,7 @@ def settings(ai: bool) -> Settings:
         internal_token="eval-not-used-0000",
         database_url=None,
         gemini_api_key=os.environ.get("GEMINI_API_KEY") if ai else None,
-        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
         embedding_model=os.environ.get("EMBEDDING_MODEL", "gemini-embedding-001"),
         embedding_dim=int(os.environ.get("EMBEDDING_DIM", "768")),
         retrieval_top_k=int(os.environ.get("RETRIEVAL_TOP_K", "8")),

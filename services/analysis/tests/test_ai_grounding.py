@@ -55,6 +55,22 @@ def test_quotes_not_in_the_draft_are_dropped(kit, settings):
     assert res.findings == [] and res.stats.ai_dropped_unanchored == 1
 
 
+def test_quotes_with_a_different_word_ending_are_anchored(kit, settings):
+    text = "Gentle Oat Cleanser helps clear acne in two weeks."
+    res, _ = run(kit, settings, text, [issue("clears acne", "G-3.2", CLAUSE_32)])
+    [f] = res.findings
+    assert f.kind == "violation" and f.quote == "clear acne"
+    assert res.stats.ai_dropped_unanchored == 0
+
+
+def test_near_misses_that_change_the_words_are_still_dropped(kit, settings):
+    text = "Gentle Oat Cleanser helps clear acne in two weeks."
+    res, _ = run(kit, settings, text, [issue("clear eczema", "G-3.2", CLAUSE_32),
+                                       issue("acne clear", "G-3.2", CLAUSE_32),
+                                       issue("cleanses acne", "G-3.2", CLAUSE_32)])
+    assert res.findings == [] and res.stats.ai_dropped_unanchored == 3
+
+
 def test_rule_and_ai_on_the_same_words_merge(kit, settings):
     clause_31 = "Do not describe any product as a miracle, magic, instant or a cure"
     res, _ = run(kit, settings, "Our Calm Barrier Moisturiser is a miracle.",
