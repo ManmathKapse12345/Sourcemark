@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Channel } from "@sourcemark/contract";
 import Link from "next/link";
 import { useAuth, useOrgApi } from "@/lib/auth";
 import { ErrorNote } from "@/components/ui";
 
 export default function NewContentPage() {
-  const { can } = useAuth();
+  const { can, orgId } = useAuth();
   const orgApi = useOrgApi();
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -17,6 +17,11 @@ export default function NewContentPage() {
   const [file, setFile] = useState<File | null>(null);
   const [aiChecks, setAiChecks] = useState(true);
 
+  const rules = useQuery({
+    queryKey: ["rules", orgId],
+    queryFn: () => orgApi<{ rules: { type: string; active: boolean; message: string; config: { channels?: string[]; any_of?: string[]; at_start?: boolean } }[] }>("/rules"),
+  });
+  const disclosures = (rules.data?.rules ?? []).filter((r) => r.active && r.type === "required_disclosure" && (!r.config.channels?.length || r.config.channels.includes(channel)));
   const create = useMutation({
     mutationFn: () => {
       if (file) {
@@ -41,8 +46,13 @@ export default function NewContentPage() {
       <h1 className="text-xl font-semibold">New content</h1>
       <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
       <select className="input" value={channel} onChange={(e) => setChannel(e.target.value)}>
-        {Channel.options.map((c) => <option key={c}>{c}</option>)}
+        {Channel.options.map((c) => <option key={c} value={c}>{c.replace("_", " ")}</option>)}
       </select>
+      {disclosures.map((r, i) => (
+        <p key={i} className="rounded-lg bg-brand-soft px-3 py-2 text-sm">
+          <b>Heads up for {channel.replace("_", " ")}:</b> {r.message}{r.config.any_of?.length ? ` ${r.config.at_start ? "Start" : "Include"} the post with ${r.config.any_of.join(" or ")}.` : ""}
+        </p>
+      ))}
       {!file && <textarea className="input h-48" placeholder="Paste the text to review" value={body} onChange={(e) => setBody(e.target.value)} required />}
       <div className="text-sm">
         <label>Or upload a file (DOCX, PDF, TXT): <input type="file" accept=".docx,.pdf,.txt,.md" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
