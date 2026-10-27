@@ -77,7 +77,7 @@ Labels in `eval/testset.jsonl`: `expected` lists the problems a piece must produ
 are neither credited nor penalised. Where one problem can fairly be quoted from two places (t07: both halves of the
 eczema claim; t19: the gifted line as well as the misplaced `#sponsored`), the second quote is listed as acceptable,
 so the AI reporting both is not counted as a false alarm. t12 still expects the 7-day promise as its own problem:
-merged into the rule's "guaranteed" finding, it is never explained to the writer.
+the AI's explanation of it is added to the rule's "guaranteed" finding, but only "guaranteed" is highlighted.
 
 ## Deploy
 
