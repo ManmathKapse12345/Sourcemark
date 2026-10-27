@@ -13,6 +13,12 @@
     "db:up": "docker compose up -d db",
     "db:migrate": "npm run migrate -w apps/api",
     "db:seed": "npm run seed -w apps/api",
-    "token": "npm run token -w apps/api --"
+    "token": "npm run token -w apps/api --",
+    "dev:web": "npm run build -w packages/contract && npm run dev -w apps/web"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true
   }
 }

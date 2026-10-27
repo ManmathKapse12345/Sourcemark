@@ -8,12 +8,13 @@ This repository holds the Round 2 core: brand kit, text and document review, cit
 roles and approvals, version history and audit log, the evaluation harness, and deployment.
 
 ```
-apps/web/            Next.js frontend (Aditya)          — not in this repo yet
+apps/web/            Next.js frontend (Aditya)          — overview page, sign-in, review queue and screen, brand kit
 apps/api/            Express + TypeScript + Prisma      — workflow, roles, versions, audit, brand kit
 services/analysis/   FastAPI (Python), internal only    — parsing, rules, facts, retrieval, Gemini, citation check
 packages/contract/   Zod schemas shared by both sides   — exported to JSON Schema for the Python tests
 eval/                demo brand kit, 30-piece labelled test set, scoring script
 docs/API.md          endpoint reference for the frontend
+docs/FRONTEND.md     how the frontend is built, run and deployed
 ```
 
 ## How a review works
@@ -54,6 +55,7 @@ npm run dev:api                                                             # te
 
 npm run demo -w apps/api                     # walks the seeded caption from submit to approval
 npm run token -- creator@northfern.test      # token for trying endpoints by hand
+npm run dev:web                              # frontend on http://localhost:3000 (see docs/FRONTEND.md)
 ```
 
 Without `GEMINI_API_KEY` everything works with rule and fact checks only, and each run reports
