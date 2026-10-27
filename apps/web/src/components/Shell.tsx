@@ -25,7 +25,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (loading || !me) return <div className="p-8"><Loading /></div>;
 
   const nav = [
-    { href: "/", label: "Review queue" },
+    { href: "/", label: "Dashboard" },
     { href: "/brand-kit", label: "Brand kit" },
     ...(can("ADMIN") ? [{ href: "/team", label: "Team" }, { href: "/audit", label: "Audit log" }] : []),
   ];
