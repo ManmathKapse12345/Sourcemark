@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* Two themes. Utilities read runtime variables, so the same classes render in light or dark. */
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --color-white: var(--c-white);
+  --color-ink: var(--c-ink);
+  --color-brand: var(--c-brand);
+  --color-brand-soft: var(--c-brand-soft);
+  --color-slate-50: var(--c-slate-50);
+  --color-slate-100: var(--c-slate-100);
+  --color-slate-200: var(--c-slate-200);
+  --color-slate-300: var(--c-slate-300);
+  --color-slate-500: var(--c-slate-500);
+  --color-slate-600: var(--c-slate-600);
+  --color-slate-700: var(--c-slate-700);
+  --color-red-50: var(--c-red-50);
+  --color-red-100: var(--c-red-100);
+  --color-red-200: var(--c-red-200);
+  --color-red-600: var(--c-red-600);
+  --color-red-700: var(--c-red-700);
+  --color-red-800: var(--c-red-800);
+  --color-orange-100: var(--c-orange-100);
+  --color-orange-200: var(--c-orange-200);
+  --color-orange-800: var(--c-orange-800);
+  --color-amber-50: var(--c-amber-50);
+  --color-amber-100: var(--c-amber-100);
+  --color-amber-200: var(--c-amber-200);
+  --color-amber-300: var(--c-amber-300);
+  --color-amber-800: var(--c-amber-800);
+  --color-yellow-100: var(--c-yellow-100);
+  --color-green-100: var(--c-green-100);
+  --color-green-800: var(--c-green-800);
+  --color-blue-100: var(--c-blue-100);
+  --color-blue-800: var(--c-blue-800);
+  --color-indigo-700: var(--c-indigo-700);
+}
+
+:root {
+  color-scheme: light;
+  --c-white: #ffffff;
+  --c-ink: #14152b;
+  --c-brand: #3b30e0;
+  --c-brand-soft: rgba(59,48,224,.10);
+  --c-slate-50: #f3f4fa;
+  --c-slate-100: #e8e9f3;
+  --c-slate-200: #d9dbea;
+  --c-slate-300: #c3c6da;
+  --c-slate-500: #666a88;
+  --c-slate-600: #4b4f6c;
+  --c-slate-700: #33364f;
+  --c-red-50: #fff0f1;
+  --c-red-100: #ffe1e5;
+  --c-red-200: #ffc4cc;
+  --c-red-600: #d6334a;
+  --c-red-700: #b4233a;
+  --c-red-800: #9c1c31;
+  --c-orange-100: #ffead8;
+  --c-orange-200: #ffd3ae;
+  --c-orange-800: #a24a00;
+  --c-amber-50: #fff8e1;
+  --c-amber-100: #fff0c4;
+  --c-amber-200: #ffe28a;
+  --c-amber-300: #f0c64a;
+  --c-amber-800: #845600;
+  --c-yellow-100: #fff1a8;
+  --c-green-100: #daf4e3;
+  --c-green-800: #156438;
+  --c-blue-100: #e0e8ff;
+  --c-blue-800: #1f43a8;
+  --c-indigo-700: #2a21b8;
+  --glass-bg: rgba(255,255,255,.62); --glass-line: rgba(20,21,43,.09); --glass-shadow: 0 30px 70px -35px rgba(40,40,90,.35);
+  --glow-a: #6d5cff; --glow-b: #ffb547; --glow-c: #ff6b81; --hl: rgba(255,214,51,.75); --hl-red: rgba(255,92,112,.35);
+}
+.dark {
+  color-scheme: dark;
+  --c-white: #11141d;
+  --c-ink: #eceef6;
+  --c-brand: #f5c451;
+  --c-brand-soft: rgba(245,196,81,.13);
+  --c-slate-50: #0a0c12;
+  --c-slate-100: #171b27;
+  --c-slate-200: #232838;
+  --c-slate-300: #343b52;
+  --c-slate-500: #8b93ab;
+  --c-slate-600: #a3abc2;
+  --c-slate-700: #c3c9da;
+  --c-red-50: #2b141a;
+  --c-red-100: #3a1a22;
+  --c-red-200: #5a2330;
+  --c-red-600: #d6454d;
+  --c-red-700: #ff9aa6;
+  --c-red-800: #ffa8b2;
+  --c-orange-100: #3b2210;
+  --c-orange-200: #5a3416;
+  --c-orange-800: #ffb27a;
+  --c-amber-50: #2a210e;
+  --c-amber-100: #3a2d10;
+  --c-amber-200: #5c4614;
+  --c-amber-300: #6b5416;
+  --c-amber-800: #f5c451;
+  --c-yellow-100: #4d4112;
+  --c-green-100: #12301f;
+  --c-green-800: #7ee2a1;
+  --c-blue-100: #14264a;
+  --c-blue-800: #8db4ff;
+  --c-indigo-700: #ffd877;
+  --glass-bg: rgba(255,255,255,.045); --glass-line: rgba(255,255,255,.09); --glass-shadow: 0 30px 80px -30px rgba(0,0,0,.8);
+  --glow-a: #3b3bd6; --glow-b: #f5c451; --glow-c: #d6454d; --hl: rgba(245,196,81,.42); --hl-red: rgba(255,110,125,.4);
+}
+
+body {
+  @apply bg-slate-50 text-ink antialiased font-sans;
+  background-image:
+    radial-gradient(60rem 30rem at 85% -10%, color-mix(in srgb, var(--glow-b) 9%, transparent), transparent 60%),
+    radial-gradient(50rem 30rem at -10% 0%, color-mix(in srgb, var(--glow-a) 9%, transparent), transparent 60%);
+  background-attachment: fixed;
+  transition: background-color .3s, color .3s;
+}
+h1, h2.display { font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.01em; }
+h1 { font-size: 1.9rem; line-height: 1.15; }
+::selection { background: color-mix(in srgb, var(--c-brand) 30%, transparent); }
+
+@utility btn { @apply inline-flex items-center justify-center rounded-lg px-3.5 py-1.5 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:cursor-not-allowed; }
+@utility btn-primary { @apply btn bg-brand text-slate-50 hover:bg-indigo-700 shadow-[0_8px_28px_-8px_var(--c-brand)]; }
+@utility btn-secondary { @apply btn border border-slate-300 bg-white/60 text-ink hover:bg-slate-100; }
+@utility btn-danger { @apply btn bg-red-600 hover:bg-red-600/85; color: #fff; }
+@utility input { @apply w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand; }
+@utility card { @apply rounded-xl border border-slate-200 bg-white/70 p-4 backdrop-blur; }
+
+/* ---------- Landing ---------- */
+.grain::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.aurora { position: absolute; inset: -20% -10% auto; height: 120vh; pointer-events: none; filter: blur(70px); opacity: .55; }
+.aurora span { position: absolute; border-radius: 9999px; animation: drift 22s ease-in-out infinite alternate; }
+@keyframes drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(6%, 4%, 0) scale(1.15); } }
+
+/* Highlighter stroke that paints left to right */
+.hl { background-repeat: no-repeat; background-size: 0% 100%; border-radius: 3px; padding: 0 .12em;
+  animation: paint .7s cubic-bezier(.6,0,.2,1) forwards; animation-delay: var(--d, 0s); }
+.hl-red { background-image: linear-gradient(100deg, transparent, var(--hl-red) 8%, var(--hl-red) 92%, transparent); }
+.hl-gold { background-image: linear-gradient(100deg, transparent, var(--hl) 8%, var(--hl) 92%, transparent); }
+@keyframes paint { to { background-size: 100% 100%; } }
+
+.scanline { position: absolute; top: 0; bottom: 0; width: 120px; left: -140px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(245,196,81,.18), rgba(255,255,255,.35) 50%, transparent);
+  animation: scan 2.6s cubic-bezier(.5,0,.3,1) .5s forwards; mix-blend-mode: screen; }
+@keyframes scan { to { left: 110%; } }
+
+.rise { opacity: 0; transform: translateY(14px); animation: rise .8s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--d, 0s); }
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+.twinkle { animation: twinkle 4s ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes twinkle { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+
+.marquee { animation: marquee 40s linear infinite; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+.glass { background: var(--glass-bg); border: 1px solid var(--glass-line);
+  backdrop-filter: blur(18px) saturate(150%); box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.08); }
+.gold-text { padding-right: .12em; margin-right: -.06em; background: linear-gradient(100deg, var(--glow-a), var(--glow-c) 55%, var(--glow-b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hl { animation: none; background-size: 100% 100%; }
+  .scanline, .aurora span, .twinkle, .marquee { animation: none; }
+  .rise { animation: none; opacity: 1; transform: none; }
+}
+
+.dark .gold-text { background-image: linear-gradient(100deg, #ffe7a8, #f5c451 40%, #e89a3c); }
+
+/* Smooth in-page navigation (Try it, How it works, Workflow); sections stop clear of the top edge. */
+html { scroll-behavior: smooth; }
+section[id] { scroll-margin-top: 1.5rem; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
