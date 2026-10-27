@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from conftest import FakeLLM, make_request
 
+from app.llm import LLMError
 from app.pipeline import analyze
 from app.retrieval import InMemoryRetriever
 
@@ -79,6 +80,71 @@ def test_rule_and_ai_on_the_same_words_merge(kit, settings):
     assert f.origins == ["rule", "ai"] and f.source.type == "rule" and f.source.code == "R-1"
     assert f.fix.replacement == "a comfort for dry skin"
     assert res.stats.merged == 1
+
+
+def test_merged_finding_keeps_what_the_ai_adds(kit, settings):
+    clause_36 = "Do not promise guaranteed or permanent results, or results within a time"
+    ai = issue("guaranteed in 7 days", "G-3.6", clause_36)
+    ai["issue"] = "It promises results within 7 days, which is not in the fact sheet."
+    res, _ = run(kit, settings, "Results are guaranteed in 7 days.", [ai])
+    [f] = res.findings
+    assert f.origins == ["rule", "ai"] and f.source.code == "R-3" and f.quote == "guaranteed"
+    assert "Results cannot be guaranteed" in f.explanation and "within 7 days" in f.explanation
+
+
+OFFER = "Free Gentle Oat Cleanser travel size with any order above ₹999, 1 to 30 November 2026"
+
+
+def test_restating_an_approved_claim_is_not_a_violation(kit, settings):
+    text = "Free Gentle Oat Cleanser travel size with every order above ₹999, from 1 to 30 November."
+    res, _ = run(kit, settings, text, [issue(text, "F-13", OFFER, category="fact")])
+    [f] = res.findings
+    assert f.kind == "needs_human_check" and "matches approved claim F-13" in f.explanation
+
+
+def test_changing_a_figure_in_an_approved_claim_is_still_a_violation(kit, settings):
+    text = "Free Gentle Oat Cleanser travel size with every order above ₹499, from 1 to 30 November."
+    res, _ = run(kit, settings, text, [issue("₹499", "F-13", OFFER, category="fact")])
+    assert [f.kind for f in res.findings if f.source and f.source.code == "F-13"] == ["violation"]
+
+
+CLAUSE_34 = "Do not compare Northfern products with competitors, criticise other brands"
+DRUGSTORE = "Only Northfern can protect your skin like this, unlike those cheap drugstore brands."
+ONLY_US = "Only Northfern can protect your skin like this."
+
+
+def run_rewrite_check(kit, settings, checks=None, fail_check=False):
+    llm = FakeLLM({"AIJudgement": {"issues": [issue("unlike those cheap drugstore brands", "G-3.4", CLAUSE_34)]},
+                   "Rewrites": {"rewrites": [{"id": 0, "text": ONLY_US}]},
+                   "RewriteChecks": {"checks": checks or []}})
+    if fail_check:
+        real = llm.generate_json
+
+        def generate_json(system, prompt, schema):
+            if schema.__name__ == "RewriteChecks":
+                raise LLMError("Gemini generation failed: 503 overloaded")
+            return real(system, prompt, schema)
+        llm.generate_json = generate_json
+    return analyze(make_request(kit, DRUGSTORE, "instagram", ai=True), llm, None, settings), llm
+
+
+def test_rewrites_are_checked_by_the_ai_against_the_clauses_they_fix(kit, settings):
+    res, llm = run_rewrite_check(kit, settings, [{"id": 0, "still_breaks": True, "source_id": "G-3.4",
+                                                  "source_quote": CLAUSE_34}])
+    assert res.rewrites == []
+    assert '"id": "G-3.4"' in llm.prompts[-1][1] and ONLY_US in llm.prompts[-1][1]
+
+    res, _ = run_rewrite_check(kit, settings, [{"id": 0, "still_breaks": False}])
+    assert [rw.text for rw in res.rewrites] == [ONLY_US]
+
+
+def test_rewrite_check_needs_a_real_citation_and_holds_back_when_unavailable(kit, settings):
+    res, _ = run_rewrite_check(kit, settings, [{"id": 0, "still_breaks": True, "source_id": "G-3.4",
+                                                "source_quote": "never mention other brands at all"}])
+    assert [rw.text for rw in res.rewrites] == [ONLY_US]
+
+    res, _ = run_rewrite_check(kit, settings, fail_check=True)
+    assert res.rewrites == [] and res.ai_status == "ok"
 
 
 def test_model_failure_still_returns_rule_findings(kit, settings):

@@ -116,7 +116,7 @@ def locate(text: str, quote: str, start_at: int = 0) -> tuple[int, int] | None:
     return _locate_inflected(text, q, start_at)
 
 
-_WORD = re.compile(r"\w+(?:'\w+)*")
+WORD = re.compile(r"\w+(?:'\w+)*")
 _ENDINGS = {"s", "es", "ed", "d", "ing", "'s"}
 
 
@@ -131,10 +131,10 @@ def _locate_inflected(text: str, quote: str, start_at: int) -> tuple[int, int] |
     """Last resort: the same words in the same order, allowing only a different word ending
     ("clears acne" for "clear acne") and different punctuation. Anything looser is treated as
     a quote the model invented."""
-    words = [w.lower() for w in _WORD.findall(quote.translate(_QUOTES))]
+    words = [w.lower() for w in WORD.findall(quote.translate(_QUOTES))]
     if not words:
         return None
-    found = [m for m in _WORD.finditer(text.translate(_QUOTES)) if m.start() >= start_at]
+    found = [m for m in WORD.finditer(text.translate(_QUOTES)) if m.start() >= start_at]
     for i in range(len(found) - len(words) + 1):
         window = found[i:i + len(words)]
         if all(_same_word(m.group().lower(), w) for m, w in zip(window, words, strict=True)):

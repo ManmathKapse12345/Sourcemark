@@ -22,6 +22,9 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding]) -> tuple[lis
             # The rule's citation is deterministic, so it stays; the AI adds its origin and maybe a fix.
             if "ai" not in target.origins:
                 target.origins.append("ai")
+            # The AI often names more of the problem than the rule does ("in 7 days" next to "guaranteed").
+            if a.kind == "violation" and a.explanation and a.explanation not in target.explanation:
+                target.explanation = f"{target.explanation} {a.explanation}"
             if target.fix is None and a.fix is not None:
                 target.fix = a.fix
             merged += 1
