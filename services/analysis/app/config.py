@@ -28,7 +28,7 @@ def get_settings() -> Settings:
         internal_token=token,
         database_url=os.environ.get("DATABASE_URL") or None,
         gemini_api_key=os.environ.get("GEMINI_API_KEY") or None,
-        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
         embedding_model=os.environ.get("EMBEDDING_MODEL", "gemini-embedding-001"),
         embedding_dim=int(os.environ.get("EMBEDDING_DIM", "768")),
         retrieval_top_k=int(os.environ.get("RETRIEVAL_TOP_K", "8")),
