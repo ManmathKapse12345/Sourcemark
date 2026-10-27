@@ -37,7 +37,12 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   if (!res.ok) {
     if (res.status === 401) onUnauthenticated();
     const e = data?.error;
-    throw new ApiError(res.status, e?.code ?? "error", e?.message ?? res.statusText, e?.details);
+    const code = e?.code ?? "error";
+    // The analysis service is down or has no AI key: say what that means instead of a raw upstream error.
+    const message = code === "analysis_unavailable"
+      ? "This step needs the analysis service, which isn't available right now. Try again in a minute, or ask your admin to check the AI settings."
+      : e?.message ?? res.statusText;
+    throw new ApiError(res.status, code, message, e?.details ?? e?.message);
   }
   return data as T;
 }

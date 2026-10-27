@@ -33,10 +33,10 @@ npm run dev:web                      # http://localhost:3000
 | `/forgot-password` | signed out | Sends a reset link. Always answers the same way, so it never reveals whether an email has an account. |
 | `/reset-password` | via email link | Choose a new password (entered twice). Supabase signs the user in for this step. |
 | `/onboarding` | signed in, no organisation | First sign-in: create a workspace (you become admin) or join your team (shows the email to give your admin). |
-| `/` | member | Review queue: status tiles, filter, cards that say whose turn it is. |
-| `/content/new` | Creator | Paste text or upload DOCX/PDF/TXT; option to run rule checks only. Other roles see an explanation instead. |
+| `/` | member | Dashboard, different per role: **Creator** sees what is waiting on them; **Reviewer** what to review; **Approver** what needs sign-off; **Admin** a workspace overview with brand-kit counts and links. All roles get the filterable list of all content below. |
+| `/content/new` | Creator | Paste text or upload DOCX/PDF/TXT; option to run rule checks only. Shows channel hints from the workspace's disclosure rules (for example "start creator posts with #ad"). Other roles see an explanation instead. |
 | `/content/:id` | member | Review screen (below). |
-| `/brand-kit` | member (edits: Admin) | Guidelines (upload, publish), rules, facts, assets. |
+| `/brand-kit` | member (edits: Admin) | Guidelines (upload or paste, review and edit clauses, publish, start a new version, suggest rules), rules (create, change severity, switch on/off), facts (add, switch off, show old values), assets. Tabs are linkable: `/brand-kit?tab=Rules`. |
 | `/team` | Admin | Add members by email, change roles. |
 | `/audit` | Admin | Organisation-wide audit log. |
 
@@ -48,18 +48,24 @@ visitor is sent to `/welcome`; a signed-in user without an organisation is sent 
 `src/app/content/[id]/page.tsx` is the heart of the product. From top to bottom:
 
 1. **Verdict** (`components/Verdict.tsx`): one sentence that answers "can this be published?", a ring showing the
-   share of issues resolved, counts of problems / to confirm / fixed, and a four-step tracker
-   (Written → Checked → Reviewed → Approved).
+   share of issues resolved, counts of problems / to confirm / fixed, disputed findings, and a four-step tracker
+   (Written → Checked → Reviewed → Approved). While a check runs (10–30 s with AI) it is replaced by
+   `CheckingPanel`, which shows the steps the server goes through. A check that failed or ran without AI shows a
+   banner with the reason (`aiStatus`, `aiError`) and a **Re-check** button (`POST /content/:id/analyze`).
 2. **The content** with highlights (`components/HighlightedBody.tsx`): wavy red = breaks a rule or fact,
    dotted gold = needs a person to confirm. Clicking a highlight scrolls to its finding. Authors can
    **Edit the text** directly; saving creates a new version and re-runs the checks.
 3. **Findings** (`components/FindingCard.tsx`): plain words ("Problem", "Please confirm"), the fix as
    *before → after*, the cited rule or fact with its code (R-4, F-2, G-3.2), and who found it (rule, AI, or both).
-   Answers: **Use this fix**, **Write my own**, **This is wrong**. After answering, the card shows the choice and a
-   *Change* link.
+   Answers: **Use this fix**, **Write my own** (with a live preview of the whole sentence, so people type only the
+   replacement words), **This is wrong**. After answering, the card shows the choice and a *Change* link. Reviewers see
+   disputed findings highlighted with the writer's reason.
+   Suggested rewrites have a **Use this rewrite** button (`applyRewriteIds`).
 4. **Actions**: only what the API lists in `availableActions`, in plain words ("Send to approver",
-   "Approve for publishing"). "Send to approver" stays disabled while problems are open, with the reason shown.
-5. Discussion and a timeline of state changes.
+   "Approve for publishing"). A disabled button always says why underneath ("2 problems are still open",
+   "Add a note for the writer first"). Errors are cleared when a new version arrives.
+5. Tabs: **Discussion**, **History** (`GET /content/:id/audit`, with names) and **Changes since vN** (word-level
+   comparison of the last two versions, `lib/diff.ts`).
 
 A problem closes only when a new version no longer produces it (the API's rule). The UI says so, so nobody expects
 "Use this fix" alone to clear it.
@@ -136,7 +142,8 @@ the two Supabase variables. Add the Vercel domain to the API's `CORS_ORIGINS`. I
 
 ## Known gaps
 
-- Brand-kit items (clauses, rules, facts, assets) are listed but not yet editable in the UI; the API supports it.
+- Rule configs can be created and switched on or off, but an existing rule's config (for example its word list) can't yet be edited in the UI.
+- "Use this rewrite" and "Suggest rules" need the AI service (`GEMINI_API_KEY`); without it the page explains that.
 - Image review, guideline health and insights are Round 3 features and have no screens yet.
 - The overview page's hero art is generated in code. A commissioned or AI-generated image can replace
   `InkShader` inside the same frame.
