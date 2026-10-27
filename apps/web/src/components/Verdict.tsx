@@ -11,9 +11,12 @@ export function Verdict({ d }: { d: ContentDetail }) {
   const solved = total === 0 ? 1 : d.closedFindingCount / total;
   const state = d.item.state;
 
+  const broken = d.latestRun?.status === "FAILED";
+  const disputes = open.filter((f) => f.responses.at(-1)?.action === "DISPUTE").length;
   const tone =
     state === "APPROVED" ? { c: "green", h: "Approved. Safe to publish.", p: "A person signed this off and every issue was resolved." }
     : state === "REJECTED" ? { c: "red", h: "Rejected. Do not publish.", p: "An approver decided this content should not go out." }
+    : broken ? { c: "amber", h: "The check didn’t finish", p: "Results below may be incomplete. Re-check before sending it on." }
     : problems > 0 ? { c: "red", h: "Not ready to publish yet", p: `${problems} ${problems === 1 ? "problem breaks" : "problems break"} your guidelines or facts. Fix them, then send it on.` }
     : checks > 0 ? { c: "amber", h: "Almost there", p: `${checks} ${checks === 1 ? "claim needs" : "claims need"} a person to confirm. Sourcemark could not match ${checks === 1 ? "it" : "them"} to an approved source.` }
     : { c: "green", h: "No issues found", p: "Every check passed against your approved guidelines." };
@@ -32,6 +35,7 @@ export function Verdict({ d }: { d: ContentDetail }) {
         <div className="min-w-0 flex-1">
           <h2 className="display text-2xl">{tone.h}</h2>
           <p className="text-sm text-slate-600">{tone.p}</p>
+          {disputes > 0 && <p className="mt-1 text-sm text-amber-800">{disputes} {disputes === 1 ? "finding is" : "findings are"} disputed by the writer.</p>}
         </div>
         <dl className="flex gap-3 text-center">
           {[["Problems", problems, "text-red-700"], ["To confirm", checks, "text-amber-800"], ["Fixed", d.closedFindingCount, "text-green-800"]].map(([l, n, c]) => (
