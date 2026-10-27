@@ -14,7 +14,7 @@ const Env = z
       .pipe(z.url()),
     // Shared secret sent to the internal analysis service on every call.
     ANALYSIS_TOKEN: z.string().min(16),
-    ANALYSIS_TIMEOUT_MS: z.coerce.number().int().default(90_000),
+    ANALYSIS_TIMEOUT_MS: z.coerce.number().int().default(180_000),
     // HS256 secret: Supabase's legacy JWT secret, or a local secret for development.
     AUTH_JWT_SECRET: z.string().min(32).optional(),
     // When set, asymmetric Supabase tokens are verified against the project's JWKS.

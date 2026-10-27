@@ -111,4 +111,32 @@ def locate(text: str, quote: str, start_at: int = 0) -> tuple[int, int] | None:
         return None
     pattern = re.compile(r"\s+".join(tokens), re.IGNORECASE)
     m = pattern.search(text.translate(_QUOTES), start_at)
-    return (m.start(), m.end()) if m else None
+    if m:
+        return m.start(), m.end()
+    return _locate_inflected(text, q, start_at)
+
+
+WORD = re.compile(r"\w+(?:'\w+)*")
+_ENDINGS = {"s", "es", "ed", "d", "ing", "'s"}
+
+
+def _same_word(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 3 and long_.startswith(short) and long_[len(short):] in _ENDINGS
+
+
+def _locate_inflected(text: str, quote: str, start_at: int) -> tuple[int, int] | None:
+    """Last resort: the same words in the same order, allowing only a different word ending
+    ("clears acne" for "clear acne") and different punctuation. Anything looser is treated as
+    a quote the model invented."""
+    words = [w.lower() for w in WORD.findall(quote.translate(_QUOTES))]
+    if not words:
+        return None
+    found = [m for m in WORD.finditer(text.translate(_QUOTES)) if m.start() >= start_at]
+    for i in range(len(found) - len(words) + 1):
+        window = found[i:i + len(words)]
+        if all(_same_word(m.group().lower(), w) for m, w in zip(window, words, strict=True)):
+            return window[0].start(), window[-1].end()
+    return None

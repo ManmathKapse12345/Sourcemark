@@ -12,17 +12,22 @@ from .contract import AnalyzeRequest, AnalyzeResponse, Stats
 from .facts import check_facts
 from .findings import Finding, assign_fingerprints
 from .judgement import JudgementStats, judge
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, time_budget
 from .merge import merge
 from .retrieval import Retriever
 from .rewrite import propose_rewrites
-from .rules import run_rules
+from .rules import repeated_words, run_rules
 from .text import sentence_spans
 
 log = logging.getLogger(__name__)
 
 
 def analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, settings: Settings) -> AnalyzeResponse:
+    with time_budget(settings.analysis_budget_s):
+        return _analyze(req, llm, retriever, settings)
+
+
+def _analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, settings: Settings) -> AnalyzeResponse:
     started = time.perf_counter()
     text = req.content.text
     channel = req.content.channel
@@ -32,7 +37,8 @@ def analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, s
     sents = sentence_spans(text)
 
     # 1. Deterministic checks decide everything checkable.
-    rule_findings = run_rules(text, sents, kit.rules, channel, clauses) + check_facts(text, sents, kit.facts, kit.rules, as_of)
+    rule_findings = (run_rules(text, sents, kit.rules, channel, clauses)
+                     + check_facts(text, sents, kit.facts, kit.rules, as_of) + repeated_words(text))
 
     # 2. Judgement checks, only when allowed for this content and a model is configured.
     ai_findings: list[Finding] = []
