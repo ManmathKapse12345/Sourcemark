@@ -72,6 +72,18 @@ def test_disclosure_and_casing(kit, settings):
     assert codes(res) == [("G-2.2", "northfern")]
 
 
+def test_repeated_words_are_a_human_check_with_a_fix(kit, settings):
+    text = "Tired of Tired of dry skin? Calm Barrier Moisturiser is a a gentle cream."
+    res = analyze(make_request(kit, text), None, None, settings)
+    assert [(f.kind, f.quote, f.fix.replacement) for f in res.findings] == [
+        ("needs_human_check", "Tired of Tired of", "Tired of"),
+        ("needs_human_check", "a a", "a"),
+    ]
+    assert all(f.source is None and f.origins == ["rule"] for f in res.findings)
+    for ok in ["Calm Barrier Moisturiser. Calm Barrier Moisturiser.", "Mix 50 50 with water.", "A gentle cream."]:
+        assert analyze(make_request(kit, ok), None, None, settings).findings == []
+
+
 def test_fingerprints_are_stable_when_other_text_changes(kit, settings):
     a = analyze(make_request(kit, "Calm Barrier Cream is great."), None, None, settings)
     b = analyze(make_request(kit, "Hello. Calm Barrier Cream is great."), None, None, settings)

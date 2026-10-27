@@ -159,3 +159,22 @@ def run_rules(text: str, sents: Spans, rules: list[RuleDTO], channel: str, claus
     for rule in rules:
         out.extend(CHECKS[rule.type](text, sents, rule, channel, clauses))
     return out
+
+
+# One to four words written twice in a row: "a a", "Tired of Tired of".
+_REPEAT = re.compile(r"(?<!\w)(\w+(?:[ \t]+\w+){0,3})[ \t]+\1(?!\w)", re.IGNORECASE)
+
+
+def repeated_words(text: str) -> list[Finding]:
+    """A common slip when replacing words. No guideline covers it, so it is only ever a human check."""
+    out: list[Finding] = []
+    for m in _REPEAT.finditer(text):
+        if m.group(1).isdigit():
+            continue
+        out.append(Finding(
+            kind="needs_human_check", category="readability", severity="low", origins=["rule"],
+            start=m.start(), end=m.end(), quote=m.group(),
+            explanation=f'"{m.group(1)}" is written twice in a row. Check that this is intended.',
+            source=None, fix=Fix(start=m.start(), end=m.end(), replacement=m.group(1)),
+        ))
+    return out

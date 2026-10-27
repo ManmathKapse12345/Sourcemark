@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Literal, Protocol, TypeVar
 
 import numpy as np
@@ -18,6 +21,26 @@ RETRYABLE = {408, 429, 500, 502, 503, 504}
 
 class LLMError(RuntimeError):
     """The model could not produce a usable answer. Callers fall back to rule checks only."""
+
+
+_deadline: ContextVar[float | None] = ContextVar("llm_deadline", default=None)
+
+
+@contextmanager
+def time_budget(seconds: float) -> Iterator[None]:
+    """Model calls made inside stop retrying, and new ones are refused, once the budget is spent, so a
+    review under rate limiting falls back to rule checks instead of outlasting the API's timeout."""
+    token = _deadline.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _deadline.reset(token)
+
+
+def _check_budget(what: str, wait: float = 0.0) -> None:
+    deadline = _deadline.get()
+    if deadline is not None and time.monotonic() + wait >= deadline:
+        raise LLMError(f"Gemini {what} skipped: the time budget for this review is used up")
 
 
 class LLM(Protocol):
@@ -49,6 +72,7 @@ class GeminiLLM:
 
         delay = 2.0
         for attempt in range(1, self.retries + 1):
+            _check_budget(what)
             try:
                 return fn()
             except errors.APIError as e:
@@ -64,6 +88,7 @@ class GeminiLLM:
                 log.warning("gemini %s error (attempt %d): %s", what, attempt, e)
                 if attempt == self.retries:
                     raise LLMError(f"Gemini {what} failed: {e}") from e
+            _check_budget(what, delay)
             time.sleep(delay)
             delay *= 2
 

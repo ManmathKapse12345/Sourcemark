@@ -17,6 +17,8 @@ class Settings:
     ai_min_confidence: float
     gemini_timeout_s: float
     gemini_max_retries: int
+    # Must stay below the API's ANALYSIS_TIMEOUT_MS minus one Gemini call (gemini_timeout_s).
+    analysis_budget_s: float = 120.0
 
 
 @lru_cache
@@ -35,4 +37,5 @@ def get_settings() -> Settings:
         ai_min_confidence=float(os.environ.get("AI_MIN_CONFIDENCE", "0.5")),
         gemini_timeout_s=float(os.environ.get("GEMINI_TIMEOUT_S", "45")),
         gemini_max_retries=int(os.environ.get("GEMINI_MAX_RETRIES", "3")),
+        analysis_budget_s=float(os.environ.get("ANALYSIS_BUDGET_S", "120")),
     )

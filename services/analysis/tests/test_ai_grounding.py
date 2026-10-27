@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
+
 from conftest import FakeLLM, make_request
 
-from app.llm import LLMError
+from app.llm import GeminiLLM, LLMError, time_budget
 from app.pipeline import analyze
 from app.retrieval import InMemoryRetriever
 
@@ -182,3 +184,35 @@ def test_rewrites_are_rechecked_against_the_rules(kit, settings):
     still_bad = "Our Calm Barrier Cream is a miracle, now ₹549."
     res, _ = run(kit, settings, text, [], rewrites=[{"id": 0, "text": still_bad}])
     assert res.rewrites == []
+
+
+def bare_gemini(retries=3):
+    llm = GeminiLLM.__new__(GeminiLLM)
+    llm.retries = retries
+    return llm
+
+
+def test_spent_time_budget_refuses_model_calls():
+    calls = []
+    with time_budget(0):
+        try:
+            bare_gemini()._with_retries("generation", lambda: calls.append(1))
+            raise AssertionError("expected LLMError")
+        except LLMError as e:
+            assert "time budget" in str(e)
+    assert calls == []
+    assert bare_gemini()._with_retries("generation", lambda: "ok") == "ok"  # no budget outside the block
+
+
+def test_retries_stop_when_the_wait_would_outlast_the_budget():
+    def flaky():
+        raise TimeoutError("read timed out")
+
+    started = time.monotonic()
+    with time_budget(1.0):  # the first retry waits 2 s, which does not fit
+        try:
+            bare_gemini()._with_retries("generation", flaky)
+            raise AssertionError("expected LLMError")
+        except LLMError as e:
+            assert "time budget" in str(e)
+    assert time.monotonic() - started < 0.5
