@@ -10,3 +10,4 @@ __pycache__/
 eval/.cache/
 eval/results/
 coverage/
+.vscode/
