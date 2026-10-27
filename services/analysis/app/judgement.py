@@ -16,12 +16,13 @@ from .facts import fact_text, is_current
 from .findings import Finding
 from .llm import LLM
 from .retrieval import Retriever
-from .text import locate, normalize
+from .text import WORD, locate, normalize, sentence_at, sentence_spans
 
 log = logging.getLogger(__name__)
 
 CHUNK_CHARS = 4000
 FALLBACK_CLAUSES = 40
+CLAIM_MATCH = 0.8
 
 
 class AIIssue(BaseModel):
@@ -96,6 +97,17 @@ def _relevant_facts(chunk: str, facts: list[FactDTO], as_of: date) -> list[FactD
     return [f for f in current if any(normalize(n) in low for n in [f.subject, *f.aliases])][:40]
 
 
+def _repeats_claim(sentence: str, fact: FactDTO) -> bool:
+    """True when a sentence restates an approved claim: most of the claim's words are there and
+    every number in the sentence is one of the claim's numbers (a changed figure is not a restatement)."""
+    claim = {w.lower() for w in WORD.findall(fact.value)}
+    said = {w.lower() for w in WORD.findall(sentence)}
+    if not claim:
+        return False
+    numbers = {w for w in said if w.isdigit()}
+    return numbers <= claim and len(claim & said) / len(claim) >= CLAIM_MATCH
+
+
 def judge(text: str, channel: str, org_id: str, clauses: list[ClauseDTO], facts: list[FactDTO], as_of: date,
           llm: LLM, retriever: Retriever | None, top_k: int, min_confidence: float) -> tuple[list[Finding], JudgementStats]:
     by_code = {c.code: c for c in clauses}
@@ -137,9 +149,15 @@ def judge(text: str, channel: str, org_id: str, clauses: list[ClauseDTO], facts:
             stats.found += 1
 
             source, problem = verify_citation(issue.source_id, issue.source_quote, by_code, facts_by_code)
+            claim = facts_by_code.get(source.code) if source and source.type == "fact" else None
+            if claim and claim.kind == "claim":
+                sentence = sentence_at(sentence_spans(text), s) or (s, e)
+                if _repeats_claim(text[sentence[0]:sentence[1]], claim):
+                    # The model says the draft contradicts an approved claim that it in fact repeats.
+                    problem = f"the wording matches approved claim {claim.code} closely"
             kind = "violation"
             explanation = issue.issue.strip()
-            if issue.type == "concern" or source is None or issue.confidence < min_confidence:
+            if issue.type == "concern" or source is None or problem or issue.confidence < min_confidence:
                 kind = "needs_human_check"
                 stats.downgraded += 1
                 why = problem or ("the AI was not confident" if issue.confidence < min_confidence else "it is a judgement call")
