@@ -94,6 +94,15 @@ def test_merged_finding_keeps_what_the_ai_adds(kit, settings):
     assert "Results cannot be guaranteed" in f.explanation and "within 7 days" in f.explanation
 
 
+def test_merged_finding_does_not_repeat_the_rule(kit, settings):
+    clause_36 = "Do not promise guaranteed or permanent results, or results within a time"
+    ai = issue("guaranteed", "G-3.6", clause_36)
+    ai["issue"] = "Results cannot be guaranteed or permanent, so this sets false expectations."
+    res, _ = run(kit, settings, "Results are guaranteed.", [ai])
+    [f] = res.findings
+    assert f.explanation == '"guaranteed" is not allowed. Results cannot be guaranteed or permanent, so this sets false expectations.'
+
+
 OFFER = "Free Gentle Oat Cleanser travel size with any order above ₹999, 1 to 30 November 2026"
 
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyEdits } from "../src/content/applyEdits.js";
+import { carryOverCodes, nextFreeCode } from "../src/content/clauseCodes.js";
 import { HttpError } from "../src/http/errors.js";
 import { availableActions, planTransition } from "../src/workflow/stateMachine.js";
 
@@ -57,5 +58,34 @@ describe("applyEdits", () => {
 
   it("refuses overlapping edits", () => {
     expect(() => applyEdits("Our Cream is great", [e(4, 9, "A"), e(0, 12, "B")])).toThrow(/same text/);
+  });
+});
+
+describe("clause codes across guideline versions", () => {
+  const speak = "Speak like a friendly skincare expert. Keep posts warm and simple, and avoid medical jargon.";
+  const flawless = 'Do not use the words "flawless" or "ageless" because they set unrealistic expectations.';
+  const spf = "Always mention SPF when talking about daytime routines.";
+  // v2 after G2-1.2 (competitor names) was removed and the SPF clause added.
+  const previous = [{ code: "G2-1.1", text: speak }, { code: "G2-1.3", text: flawless }, { code: "G2-1.4", text: spf }];
+  const everUsed = ["G2-1.1", "G2-1.2", "G2-1.3", "G2-1.4"];
+
+  it("keeps each clause's code when the extractor renumbers by position", () => {
+    const next = carryOverCodes(
+      [
+        { code: "G2-1.1", text: `${speak} Also avoid over hype.` }, // edited
+        { code: "G2-1.2", text: flawless },
+        { code: "G2-1.3", text: spf },
+        { code: "G2-1.4", text: "Reply to comments within a day." }, // new
+      ],
+      previous,
+      everUsed,
+    );
+    expect(next.map((c) => c.code)).toEqual(["G2-1.1", "G2-1.3", "G2-1.4", "G2-1.5"]);
+  });
+
+  it("never gives a new clause a code the guideline used before", () => {
+    const [c] = carryOverCodes([{ code: "G2-1.2", text: "Never mention competitor prices." }], previous, everUsed);
+    expect(c!.code).toBe("G2-1.5");
+    expect(nextFreeCode("G-7", new Set(["G-8"]))).toBe("G-9");
   });
 });
