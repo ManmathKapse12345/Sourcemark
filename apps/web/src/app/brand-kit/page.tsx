@@ -126,7 +126,7 @@ function GuidelineDetail({ id }: { id: string }) {
       <ErrorNote error={publish.error ?? dropDraft.error ?? newVersion.error} />
       <ul className="space-y-2">{v.clauses?.map((c) => <ClauseRow key={c.id} c={c} editable={admin && draft} onChange={refresh} />)}</ul>
       {admin && draft && <AddClause versionId={v.id} onDone={refresh} />}
-      {admin && <SuggestRules versionId={v.id} />}
+      {admin && <SuggestRules key={v.id} versionId={v.id} />}
     </div>
   );
 }
@@ -295,7 +295,7 @@ function NewRule() {
 function Facts() {
   const { orgId, admin, orgApi, invalidate } = useKit();
   const [showOld, setShowOld] = useState(false);
-  const q = useQuery({ queryKey: ["facts", orgId, showOld], queryFn: () => orgApi<{ facts: (Fact & { validFrom?: string; validTo?: string })[] }>(`/facts${showOld ? "?all=true" : ""}`) });
+  const q = useQuery({ queryKey: ["facts", orgId, showOld], queryFn: () => orgApi<{ facts: (Fact & { validFrom?: string; validUntil?: string })[] }>(`/facts${showOld ? "?all=true" : ""}`) });
   const patch = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => orgApi(`/facts/${id}`, { method: "PATCH", body: { active } }), onSuccess: () => invalidate("facts") });
   return (
     <div className="space-y-4">
@@ -305,11 +305,11 @@ function Facts() {
       {q.isLoading ? <Loading /> : !q.data?.facts.length ? <Empty>No facts yet.</Empty> : (
         <ul className="card divide-y divide-slate-200 !p-0">
           {q.data.facts.map((f) => (
-            <li key={f.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${f.active ? "" : "opacity-60"}`}>
+            <li key={f.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${f.active && !(f.validUntil && f.validUntil.slice(0, 10) < new Date().toISOString().slice(0, 10)) ? "" : "opacity-60"}`}>
               <span className="w-10 font-mono text-xs text-brand">{f.code}</span>
               <span className="min-w-0 flex-1">{f.subject} · <span className="text-slate-500">{f.attribute}</span></span>
               <span className="font-medium">{f.kind === "money" && f.unit === "INR" ? `₹${f.value}` : `${f.value}${f.unit ? ` ${f.unit}` : ""}`}</span>
-              {f.validTo && <span className="text-xs text-slate-500">until {f.validTo.slice(0, 10)}</span>}
+              {f.validUntil && <span className="text-xs text-slate-500">until {f.validUntil.slice(0, 10)}</span>}
               {admin && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={f.active} onChange={(e) => patch.mutate({ id: f.id, active: e.target.checked })} /> On</label>}
             </li>
           ))}
