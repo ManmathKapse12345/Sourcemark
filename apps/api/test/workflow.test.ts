@@ -39,6 +39,10 @@ describe("content workflow end to end", () => {
     }).expect(201);
     expect(rule.body.code).toBe("R-1");
     expect(rule.body.config).toEqual({ terms: ["miracle"], replacement: null, category: "claim" });
+    const dup = await admin.post(`/api/orgs/${orgId}/rules`, {
+      type: "banned_term", severity: "low", message: "Same check again", config: { terms: ["Miracle"] },
+    }).expect(409);
+    expect(dup.body.error.message).toContain("R-1");
     await admin.post(`/api/orgs/${orgId}/rules`, { type: "terminology", severity: "high", message: "x", config: {} }).expect(400);
   });
 
@@ -52,6 +56,10 @@ describe("content workflow end to end", () => {
     expect([first.body.code, second.body.code]).toEqual(["F-1", "F-2"]);
     const old = await prisma.fact.findUniqueOrThrow({ where: { id: first.body.id } });
     expect(old.validUntil?.toISOString().slice(0, 10)).toBe("2026-06-30");
+    const current = (await admin.get(`/api/orgs/${orgId}/facts`).expect(200)).body.facts.map((f: { code: string }) => f.code);
+    expect(current).toEqual(["F-2"]);
+    const all = (await admin.get(`/api/orgs/${orgId}/facts?all=true`).expect(200)).body.facts.map((f: { code: string }) => f.code);
+    expect(all).toEqual(["F-2", "F-1"]);
   });
 
   it("uploads, edits and publishes a guideline", async () => {
