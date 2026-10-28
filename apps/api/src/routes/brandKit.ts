@@ -14,6 +14,7 @@ import {
 import { Router } from "express";
 import type { AnalysisClient } from "../analysis/client.js";
 import { audit } from "../audit.js";
+import { carryOverCodes, nextFreeCode } from "../content/clauseCodes.js";
 import { member, requireRole } from "../auth/middleware.js";
 import { prisma, type Db } from "../db.js";
 import { factCode, guidelinePrefix, ruleCode } from "../db/codes.js";
@@ -30,6 +31,15 @@ function parseRuleConfig(type: RuleType, config: unknown) {
   const parsed = RuleConfigByType[type].safeParse(config);
   if (!parsed.success) throw badRequest(`Invalid config for a ${type} rule`, parsed.error.issues);
   return parsed.data as Prisma.InputJsonValue;
+}
+
+// Two rules are the same check when type and config match, ignoring key order, word order in lists and case.
+function sameCheck(a: unknown, b: unknown) {
+  const norm = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(norm).map((x) => JSON.stringify(x)).sort()
+      : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, norm(x)]))
+      : typeof v === "string" ? v.trim().toLowerCase() : v;
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
 }
 
 async function assertClauseExists(db: Db, orgId: string, code: string | null | undefined) {
@@ -120,7 +130,8 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
     res.status(201).json({ ...created, clauses: extracted.clauses, warnings: extracted.warnings });
   });
 
-  // A new version of an existing guideline keeps the same prefix, so clause codes stay stable.
+  // A new version of an existing guideline keeps the same prefix, and each clause keeps its code
+  // (matched by text against the previous version), so rules and findings citing it stay correct.
   r.post("/guidelines/:guidelineId/versions", admin, upload.single("file"), async (req, res) => {
     const me = member(req);
     const g = owned(
@@ -138,6 +149,12 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
     if (req.file) assertFileContent(req.file);
     if (!req.file && !text) throw badRequest("Upload a file or provide text");
     const extracted = await analysis.extractGuideline({ file: req.file, text, prefix: g.prefix });
+    const history = await prisma.clause.findMany({ where: { version: { guidelineId: g.id } }, select: { code: true, text: true, versionId: true } });
+    const clauses = carryOverCodes(
+      extracted.clauses,
+      history.filter((c) => c.versionId === g.versions[0]?.id),
+      history.map((c) => c.code),
+    );
 
     const version = await prisma.$transaction(async (tx) => {
       const v = await tx.guidelineVersion.create({
@@ -151,12 +168,12 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
         },
       });
       await tx.clause.createMany({
-        data: extracted.clauses.map((c, i) => ({ orgId: me.orgId, versionId: v.id, code: c.code, heading: c.heading, text: c.text, position: i })),
+        data: clauses.map((c, i) => ({ orgId: me.orgId, versionId: v.id, code: c.code, heading: c.heading, text: c.text, position: i })),
       });
       await audit(tx, { orgId: me.orgId, actorId: me.id, action: "guideline.version_uploaded", entityType: "Guideline", entityId: g.id, data: { versionId: v.id } });
       return v;
     });
-    res.status(201).json({ version, clauses: extracted.clauses, warnings: extracted.warnings });
+    res.status(201).json({ version, clauses, warnings: extracted.warnings });
   });
 
   async function draftVersion(orgId: string, versionId: string) {
@@ -179,9 +196,13 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
     const me = member(req);
     const v = await draftVersion(me.orgId, param(req.params.versionId, "versionId"));
     const body = parseBody(AddClauseBody, req.body);
-    const count = await prisma.clause.count({ where: { versionId: v.id } });
-    const code = body.code ?? `${v.guideline.prefix}-${count + 1}`;
+    const current = await prisma.clause.findMany({ where: { versionId: v.id }, orderBy: { position: "asc" }, select: { code: true } });
+    const count = current.length;
+    // A new clause never takes a code the guideline has used before, so rules citing it keep their meaning.
+    const used = new Set((await prisma.clause.findMany({ where: { version: { guidelineId: v.guidelineId } }, select: { code: true } })).map((c) => c.code));
+    const code = body.code ?? nextFreeCode(current.at(-1)?.code ?? `${v.guideline.prefix}-1.0`, used);
     if (!code.startsWith(`${v.guideline.prefix}-`)) throw badRequest(`Clause codes in this guideline start with ${v.guideline.prefix}-`);
+    if (current.some((c) => c.code === code)) throw conflict(`This version already has a clause ${code}`);
     const clause = await prisma.$transaction(async (tx) => {
       const c = await tx.clause.create({
         data: { orgId: me.orgId, versionId: v.id, code, heading: body.heading ?? null, text: body.text, position: count },
@@ -274,6 +295,13 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
     const body = parseBody(CreateRuleBody, req.body);
     const config = parseRuleConfig(body.type, body.config);
     await assertClauseExists(prisma, me.orgId, body.clauseCode);
+    const existing = (await prisma.rule.findMany({ where: { orgId: me.orgId, type: body.type } })).find((r) => sameCheck(r.config, config));
+    if (existing) {
+      throw conflict(
+        `${existing.code} already checks this${existing.active ? "" : " (it is switched off; switch it on instead)"}`,
+        { rule: { id: existing.id, code: existing.code, active: existing.active } },
+      );
+    }
     const rule = await prisma.$transaction(async (tx) => {
       const created = await tx.rule.create({
         data: {
