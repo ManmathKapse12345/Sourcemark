@@ -1,24 +1,25 @@
-# Render Blueprint: Express API (public), analysis service (private network only), Postgres.
-# The frontend (apps/web) deploys separately to Vercel.
-databases:
-  - name: sourcemark-db
-    databaseName: sourcemark
-    plan: basic-256mb   # pgvector is available on Render Postgres; free databases expire after 30 days
+# Render Blueprint, free plan: Express API and analysis service as free web services.
+# The database is Supabase Postgres (pgvector), and the frontend (apps/web) deploys to Vercel.
+# Steps and the values to fill in: docs/DEPLOY.md.
+#
+# Free web services sleep after ~15 minutes without traffic; the first request then takes 30-60 s.
+# To upgrade, set plan: starter on both services (and optionally make the analysis service a
+# private service, type: pserv, reached through fromService hostport).
 
 services:
-  - type: pserv          # private service: reachable only from other services in this workspace
+  - type: web
     name: sourcemark-analysis
     runtime: docker
-    plan: starter
+    plan: free
     dockerContext: ./services/analysis
     dockerfilePath: ./services/analysis/Dockerfile
+    healthCheckPath: /health
     envVars:
+      # Public on the free plan, so every request must carry this token (the API sends it).
       - key: INTERNAL_TOKEN
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sourcemark-db
-          property: connectionString
+      - key: DATABASE_URL         # Supabase session pooler connection string
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
@@ -31,28 +32,23 @@ services:
   - type: web
     name: sourcemark-api
     runtime: docker
-    plan: starter
+    plan: free
     dockerContext: .
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /health
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sourcemark-db
-          property: connectionString
-      - key: ANALYSIS_URL
-        fromService:
-          type: pserv
-          name: sourcemark-analysis
-          property: hostport
+      - key: DATABASE_URL         # same Supabase session pooler connection string
+        sync: false
+      - key: ANALYSIS_URL         # public URL of sourcemark-analysis, e.g. https://sourcemark-analysis.onrender.com
+        sync: false
       - key: ANALYSIS_TOKEN
         fromService:
-          type: pserv
+          type: web
           name: sourcemark-analysis
           envVarKey: INTERNAL_TOKEN
       - key: SUPABASE_URL
         sync: false
       - key: AUTH_JWT_SECRET
         sync: false
-      - key: CORS_ORIGINS
+      - key: CORS_ORIGINS         # the Vercel URL, e.g. https://sourcemark.vercel.app
         sync: false
