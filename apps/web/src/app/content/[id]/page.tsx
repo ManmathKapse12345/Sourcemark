@@ -12,7 +12,7 @@ import { FindingCard } from "@/components/FindingCard";
 import { CheckingPanel } from "@/components/CheckingPanel";
 
 const ACTION_LABEL: Record<string, string> = {
-  SUBMIT: "Check & send for review", RESOLVE: "Send to approver", REVISE: "Edit again", REQUEST_CHANGES: "Ask for changes", APPROVE: "Approve for publishing", REJECT: "Reject",
+  SUBMIT: "Check & send for review", RESOLVE: "Send for review", REVISE: "Edit again", REQUEST_CHANGES: "Ask for changes", APPROVE: "Approve for publishing", REJECT: "Reject",
 };
 const AUDIT_LABEL: Record<string, string> = {
   "content.created": "Created the draft", "content.version_created": "Saved a new version", "content.submitted": "Sent it for checks",

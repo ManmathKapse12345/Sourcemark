@@ -42,7 +42,7 @@ export default function NewContentPage() {
     </div>
   );
   return (
-    <form className="card mx-auto max-w-2xl space-y-3" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
+    <form className="card mx-auto max-w-2xl space-y-3" onSubmit={(e) => { e.preventDefault(); if (!create.isPending && !create.isSuccess) create.mutate(); }}>
       <h1 className="text-xl font-semibold">New content</h1>
       <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
       <select className="input" value={channel} onChange={(e) => setChannel(e.target.value)}>
@@ -62,7 +62,7 @@ export default function NewContentPage() {
         Use AI checks (uncheck to run rule checks only; nothing is sent to the LLM)
       </label>
       <ErrorNote error={create.error} />
-      <button className="btn-primary" disabled={create.isPending}>{create.isPending ? "Creating…" : "Create draft"}</button>
+      <button className="btn-primary" disabled={create.isPending || create.isSuccess}>{create.isPending ? "Creating…" : "Create draft"}</button>
     </form>
   );
 }
