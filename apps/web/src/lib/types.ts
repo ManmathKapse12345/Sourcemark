@@ -59,6 +59,7 @@ export type Run = {
   aiError: string | null;
   model: string | null;
   durationMs: number | null;
+  createdAt: string;
   findings: Finding[];
   rewrites: Rewrite[];
 };

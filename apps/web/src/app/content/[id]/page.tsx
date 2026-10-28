@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth, useOrgApi } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 import { diffWords } from "@/lib/diff";
-import type { AuditEntry, ContentDetail, Member } from "@/lib/types";
+import type { AuditEntry, ContentDetail, Member, Run } from "@/lib/types";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Verdict } from "@/components/Verdict";
 import { HighlightedBody } from "@/components/HighlightedBody";
@@ -21,6 +21,10 @@ const AUDIT_LABEL: Record<string, string> = {
 };
 const NOTE_REQUIRED = new Set(["REQUEST_CHANGES", "REJECT"]);
 const CHECK_ACTIONS = new Set(["SUBMIT"]);
+// A check still running on the server (started in another tab, or before a reload). Past the API's
+// own timeout a RUNNING run is stuck, so stop waiting for it.
+const STUCK_AFTER_MS = 4 * 60_000;
+const stillRunning = (run?: Run | null) => run?.status === "RUNNING" && Date.now() - Date.parse(run.createdAt) < STUCK_AFTER_MS;
 
 export default function ContentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -35,7 +39,11 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
   const key = ["content-detail", id];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
-  const q = useQuery({ queryKey: key, queryFn: () => orgApi<ContentDetail>(`/content/${id}`) });
+  const q = useQuery({
+    queryKey: key,
+    queryFn: () => orgApi<ContentDetail>(`/content/${id}`),
+    refetchInterval: (query) => (stillRunning(query.state.data?.latestRun) ? 3000 : false),
+  });
   const members = useQuery({ queryKey: ["members", orgId], queryFn: () => orgApi<{ members: Member[] }>("/") });
   const audit = useQuery({ queryKey: ["content-audit", id], queryFn: () => orgApi<{ entries: AuditEntry[] }>(`/content/${id}/audit`), enabled: tab === "history" });
 
@@ -73,7 +81,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
   const editable = isAuthor && ["DRAFT", "CHECKING"].includes(d.item.state);
   const canRespond = d.item.state === "IN_REVIEW" ? !isAuthor : editable;
   const needNote = d.availableActions.some((a) => NOTE_REQUIRED.has(a));
-  const checking = newVersion.isPending || recheck.isPending || (transition.isPending && CHECK_ACTIONS.has(transition.variables ?? ""));
+  const checking = newVersion.isPending || recheck.isPending || (transition.isPending && CHECK_ACTIONS.has(transition.variables ?? "")) || stillRunning(run);
   const runBroken = run?.status === "FAILED";
   const open = d.blockingFindingIds.length;
 
@@ -226,7 +234,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
           <h2 className="text-sm font-semibold">What Sourcemark found <span className="text-slate-500">({findings.length})</span></h2>
           {findings.length === 0 && (
             <p className="text-sm text-slate-500">
-              {!run ? "Not checked yet. Choose “Check & send for review”." : runBroken ? "No results, because the check didn’t finish." : "Nothing to fix here."}
+              {!run ? "Not checked yet. Choose “Check & send for review”." : checking ? "Checking…" : runBroken ? "No results, because the check didn’t finish." : "Nothing to fix here."}
             </p>
           )}
           {findings.map((f) => (
