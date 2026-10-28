@@ -1,11 +1,9 @@
-# Render Blueprint, free plan: Express API and analysis service as free web services.
-# The database is Supabase Postgres (pgvector), and the frontend (apps/web) deploys to Vercel.
-# Steps and the values to fill in: docs/DEPLOY.md.
+# Render Blueprint: Express API and analysis service, both public web services on the free plan.
+# The database is Supabase Postgres with pgvector (Render's free Postgres expires after 30 days),
+# so DATABASE_URL is set by hand on both services. The frontend (apps/web) deploys separately to Vercel.
 #
-# Free web services sleep after ~15 minutes without traffic; the first request then takes 30-60 s.
-# To upgrade, set plan: starter on both services (and optionally make the analysis service a
-# private service, type: pserv, reached through fromService hostport).
-
+# Private services are not available on the free plan, so the analysis service is a public web service
+# that rejects every request without INTERNAL_TOKEN. Only the API holds that token.
 services:
   - type: web
     name: sourcemark-analysis
@@ -15,10 +13,9 @@ services:
     dockerfilePath: ./services/analysis/Dockerfile
     healthCheckPath: /health
     envVars:
-      # Public on the free plan, so every request must carry this token (the API sends it).
       - key: INTERNAL_TOKEN
         generateValue: true
-      - key: DATABASE_URL         # Supabase session pooler connection string
+      - key: DATABASE_URL     # Supabase connection string
         sync: false
       - key: GEMINI_API_KEY
         sync: false
@@ -37,9 +34,9 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /health
     envVars:
-      - key: DATABASE_URL         # same Supabase session pooler connection string
+      - key: DATABASE_URL     # same Supabase connection string
         sync: false
-      - key: ANALYSIS_URL         # public URL of sourcemark-analysis, e.g. https://sourcemark-analysis.onrender.com
+      - key: ANALYSIS_URL     # public URL of sourcemark-analysis, e.g. https://sourcemark-analysis.onrender.com
         sync: false
       - key: ANALYSIS_TOKEN
         fromService:
@@ -50,5 +47,5 @@ services:
         sync: false
       - key: AUTH_JWT_SECRET
         sync: false
-      - key: CORS_ORIGINS         # the Vercel URL, e.g. https://sourcemark.vercel.app
+      - key: CORS_ORIGINS
         sync: false
