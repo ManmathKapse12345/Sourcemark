@@ -95,7 +95,7 @@ async function main() {
       data: { orgId: ORG, contentItemId: item.id, number: 1, body: "Our Calm Barrier Cream is a MIRACLE, now just ₹499!!", createdById: creator },
     });
     await tx.auditLog.create({ data: { orgId: ORG, actorId: null, action: "seed.loaded", entityType: "Organisation", entityId: ORG } });
-  });
+  }, { maxWait: 20_000, timeout: 120_000 }); // a remote database (e.g. Supabase) needs far more than the 5 s default
 
   // Embeddings need the analysis service with a Gemini key; without them, AI review uses all clauses.
   const embedded = await embedClauses().catch((err: Error) => `skipped (${err.message})`);

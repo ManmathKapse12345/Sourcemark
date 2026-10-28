@@ -31,9 +31,10 @@ async function supabase() {
 }
 supabase.client = undefined as ReturnType<typeof import("@supabase/supabase-js").createClient> | undefined;
 
+// A stored token (sample accounts, developer sign-in) is used when there is no Supabase session.
 async function currentToken(): Promise<string | null> {
-  if (usingSupabase) return (await (await supabase()).auth.getSession()).data.session?.access_token ?? null;
-  return localStorage.getItem(TOKEN_KEY);
+  const session = usingSupabase ? (await (await supabase()).auth.getSession()).data.session?.access_token : null;
+  return session ?? localStorage.getItem(TOKEN_KEY);
 }
 
 type AuthCtx = {
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrg(localStorage.getItem(ORG_KEY));
     currentToken().then((t) => { setHasToken(!!t); setReady(true); });
     if (usingSupabase) void supabase().then((c) => c.auth.onAuthStateChange((event, session) => {
-      setHasToken(!!session);
+      setHasToken(!!session || !!localStorage.getItem(TOKEN_KEY));
       if (event === "PASSWORD_RECOVERY") router.replace("/reset-password");
     }));
   }, [signOut, router]);
@@ -99,11 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     memberId: membership?.memberId ?? null,
     can: (...r) => r.some((x) => roles.includes(x)),
     signIn: async ({ email, password, token }) => {
-      if (usingSupabase) {
+      if (token) {
+        if (usingSupabase) await (await supabase()).auth.signOut();
+        localStorage.setItem(TOKEN_KEY, token.trim());
+      } else if (usingSupabase) {
         const { error } = await (await supabase()).auth.signInWithPassword({ email: email!, password: password! });
         if (error) throw new Error(friendly(error.message));
-      } else {
-        localStorage.setItem(TOKEN_KEY, token!.trim());
+        localStorage.removeItem(TOKEN_KEY);
       }
       setHasToken(true);
       await qc.invalidateQueries({ queryKey: ["me"] });
