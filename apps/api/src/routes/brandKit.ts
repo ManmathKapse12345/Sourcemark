@@ -351,9 +351,13 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
 
   r.get("/facts", async (req, res) => {
     const { orgId } = member(req);
+    // By default only facts in use: switched on and not ended. ?all=true adds the history.
     const includeInactive = req.query.all === "true";
     const facts = await prisma.fact.findMany({
-      where: { orgId, ...(includeInactive ? {} : { active: true }) },
+      where: {
+        orgId,
+        ...(includeInactive ? {} : { active: true, OR: [{ validUntil: null }, { validUntil: { gte: toDate(today()) } }] }),
+      },
       orderBy: [{ subject: "asc" }, { attribute: "asc" }, { validFrom: "desc" }],
     });
     res.json({ facts });
