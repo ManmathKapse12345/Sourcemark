@@ -10,7 +10,7 @@ roles and approvals, version history and audit log, the evaluation harness, and 
 ```
 apps/web/            Next.js frontend (Aditya)          — overview page, sign-in, review queue and screen, brand kit
 apps/api/            Express + TypeScript + Prisma      — workflow, roles, versions, audit, brand kit
-services/analysis/   FastAPI (Python), internal only    — parsing, rules, facts, retrieval, Gemini, citation check
+services/analysis/   FastAPI (Python), API-only (token) — parsing, rules, facts, retrieval, Gemini, citation check
 packages/contract/   Zod schemas shared by both sides   — exported to JSON Schema for the Python tests
 eval/                demo brand kit, 30-piece labelled test set, scoring script
 docs/API.md          endpoint reference for the frontend
@@ -81,9 +81,19 @@ the AI's explanation of it is added to the rule's "guaranteed" finding, but only
 
 ## Deploy
 
-`render.yaml` defines the API (public web service), the analysis service (private service, reachable only
-from the API) and Postgres. Set `GEMINI_API_KEY`, `SUPABASE_URL` (and/or `AUTH_JWT_SECRET`) and `CORS_ORIGINS`
-in the Render dashboard. The internal token is generated and shared automatically. The frontend deploys to Vercel.
+The live deployment runs on free plans:
+
+- **Database and sign-in:** Supabase (Postgres with pgvector, and Supabase Auth). Render's free Postgres expires
+  after 30 days, and Supabase already handles login.
+- **API and analysis service:** two Docker web services on Render, defined in `render.yaml`. Private services are
+  not available on Render's free plan, so the analysis service is public but rejects every request without the
+  internal token, which only the API holds. Only `/health` is open.
+- **Frontend:** Vercel.
+
+In the Render dashboard set `DATABASE_URL` (the Supabase connection string) on both services, `GEMINI_API_KEY` on
+the analysis service, and `ANALYSIS_URL` (the analysis service's public URL), `SUPABASE_URL` (and/or
+`AUTH_JWT_SECRET`) and `CORS_ORIGINS` on the API. The internal token is generated and shared automatically.
+Free services sleep when idle; the API retries the analysis service for up to 90 seconds while it wakes up.
 
 ## Notes for maintainers
 
