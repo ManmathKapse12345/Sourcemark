@@ -7,6 +7,7 @@ import { CountUp } from "@/components/landing/CountUp";
 import { SectionNav } from "@/components/landing/SectionNav";
 
 const d = (s: number) => ({ "--d": `${s}s` }) as React.CSSProperties;
+const DEMO_LOGIN = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
 
 const STEPS = [
   { t: "Rules run first", p: "Prices, product names, banned words and capitals are checked by plain code. No AI guessing on anything a rule can decide." },
@@ -45,6 +46,7 @@ export default function Welcome() {
             </div>
             <div className="ml-auto flex items-center gap-2">
               <ThemeToggle />
+              {DEMO_LOGIN && <Link href="/login#demo" className="btn-primary !rounded-full !px-5">Demo login</Link>}
               <Link href="/login" className="btn-secondary !rounded-full !px-5">Sign in</Link>
             </div>
           </nav>
