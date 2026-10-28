@@ -94,6 +94,13 @@ def test_merged_finding_keeps_what_the_ai_adds(kit, settings):
     assert "Results cannot be guaranteed" in f.explanation and "within 7 days" in f.explanation
 
 
+def test_rule_and_ai_on_the_exact_same_words_merge_across_categories(kit, settings):
+    res, _ = run(kit, settings, "Loving it for beach beach days.",
+                 [issue("beach beach", type_="concern", category="style", fix="beach")])
+    [f] = res.findings
+    assert f.category == "readability" and f.origins == ["rule", "ai"] and res.stats.merged == 1
+
+
 def test_merged_finding_does_not_repeat_the_rule(kit, settings):
     clause_36 = "Do not promise guaranteed or permanent results, or results within a time"
     ai = issue("guaranteed", "G-3.6", clause_36)
