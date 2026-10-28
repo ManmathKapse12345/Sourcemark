@@ -35,6 +35,7 @@ export function createApp(deps: AppDeps) {
 
   const api = express.Router();
   api.use(authenticate(deps.verifyToken));
+  api.use((_req, _res, next) => { deps.analysis.warm?.(); next(); });
   api.use(accountRouter());
 
   const org = express.Router({ mergeParams: true });
