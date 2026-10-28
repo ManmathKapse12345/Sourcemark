@@ -48,6 +48,10 @@ def _add_explanation(current: str, extra: str) -> str:
 def _same_problem(a: Finding, b: Finding) -> bool:
     if not (a.span and b.span and overlaps(a.span, b.span)):
         return False
+    # The exact same words are one problem even when the AI files it under another category
+    # (the repeated-word rule says "readability", the AI often says "style").
+    if a.span == b.span:
+        return True
     return (a.grounding is not None and a.grounding == b.grounding) or a.category == b.category
 
 
