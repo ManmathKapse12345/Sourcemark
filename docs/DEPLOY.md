@@ -48,8 +48,9 @@ To move to paid plans later, set `plan: starter` on both services in `render.yam
 ## 3. Vercel: website
 
 1. Vercel → **Add New → Project** → this repository.
-2. Root directory `apps/web`; install command `npm ci`; build command
-   `npm run build -w packages/contract && npm run build -w apps/web`.
+2. Root directory `apps/web`; install command `cd ../.. && npm ci`; build command
+   `cd ../.. && npm run build -w packages/contract && npm run build -w apps/web`. The commands run inside
+   `apps/web`, so they first move to the repository root, where the npm workspaces are defined.
 3. Environment variables:
 
    | Variable | Value |

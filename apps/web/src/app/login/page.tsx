@@ -48,10 +48,10 @@ function Login() {
       )}
 
       {SAMPLE_LOGIN && (
-        <>
-          {usingSupabase && <p className="flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-slate-200" />or try the sample workspace<span className="h-px flex-1 bg-slate-200" /></p>}
+        <div id="demo" className="scroll-mt-6 space-y-7">
+          {usingSupabase && <p className="flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-slate-200" />or use a demo login<span className="h-px flex-1 bg-slate-200" /></p>}
           <SampleAccounts onError={setError} />
-        </>
+        </div>
       )}
 
       {!usingSupabase && (
