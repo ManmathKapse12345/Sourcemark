@@ -39,6 +39,10 @@ describe("content workflow end to end", () => {
     }).expect(201);
     expect(rule.body.code).toBe("R-1");
     expect(rule.body.config).toEqual({ terms: ["miracle"], replacement: null, category: "claim" });
+    const dup = await admin.post(`/api/orgs/${orgId}/rules`, {
+      type: "banned_term", severity: "low", message: "Same check again", config: { terms: ["Miracle"] },
+    }).expect(409);
+    expect(dup.body.error.message).toContain("R-1");
     await admin.post(`/api/orgs/${orgId}/rules`, { type: "terminology", severity: "high", message: "x", config: {} }).expect(400);
   });
 
