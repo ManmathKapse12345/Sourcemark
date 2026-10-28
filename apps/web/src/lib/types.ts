@@ -83,6 +83,6 @@ export type Clause = { id: string; code: string; heading: string | null; text: s
 export type GuidelineVersion = { id: string; number: number; status: string; clauses?: Clause[] };
 export type Guideline = { id: string; title: string; versions: GuidelineVersion[] };
 export type Rule = { id: string; code: string; type: string; severity: Severity; message: string; clauseCode: string | null; active: boolean };
-export type Fact = { id: string; code: string; subject: string; attribute: string; kind: string; value: string; unit: string | null; validFrom?: string | null; validTo?: string | null; active: boolean };
+export type Fact = { id: string; code: string; subject: string; attribute: string; kind: string; value: string; unit: string | null; validFrom?: string | null; validUntil?: string | null; active: boolean };
 export type Asset = { id: string; name: string; type: string; url: string | null; notes: string | null };
 export type AuditEntry = { id: string; action: string; actorId: string | null; createdAt: string; [k: string]: unknown };

@@ -18,7 +18,7 @@ export function Verdict({ d }: { d: ContentDetail }) {
     : state === "REJECTED" ? { c: "red", h: "Rejected. Do not publish.", p: "An approver decided this content should not go out." }
     : broken ? { c: "amber", h: "The check didn’t finish", p: "Results below may be incomplete. Re-check before sending it on." }
     : problems > 0 ? { c: "red", h: "Not ready to publish yet", p: `${problems} ${problems === 1 ? "problem breaks" : "problems break"} your guidelines or facts. Fix them, then send it on.` }
-    : checks > 0 ? { c: "amber", h: "Almost there", p: `${checks} ${checks === 1 ? "claim needs" : "claims need"} a person to confirm. Sourcemark could not match ${checks === 1 ? "it" : "them"} to an approved source.` }
+    : checks > 0 ? { c: "amber", h: "Almost there", p: `${checks} ${checks === 1 ? "item needs" : "items need"} a person to confirm before this goes out.` }
     : { c: "green", h: "No issues found", p: "Every check passed against your approved guidelines." };
 
   const ring = { green: "var(--color-green-800)", amber: "var(--color-brand)", red: "var(--color-red-700)" }[tone.c]!;
