@@ -56,6 +56,10 @@ describe("content workflow end to end", () => {
     expect([first.body.code, second.body.code]).toEqual(["F-1", "F-2"]);
     const old = await prisma.fact.findUniqueOrThrow({ where: { id: first.body.id } });
     expect(old.validUntil?.toISOString().slice(0, 10)).toBe("2026-06-30");
+    const current = (await admin.get(`/api/orgs/${orgId}/facts`).expect(200)).body.facts.map((f: { code: string }) => f.code);
+    expect(current).toEqual(["F-2"]);
+    const all = (await admin.get(`/api/orgs/${orgId}/facts?all=true`).expect(200)).body.facts.map((f: { code: string }) => f.code);
+    expect(all).toEqual(["F-2", "F-1"]);
   });
 
   it("uploads, edits and publishes a guideline", async () => {
