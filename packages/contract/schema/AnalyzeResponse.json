@@ -27,7 +27,9 @@
               "style",
               "readability",
               "disclosure",
-              "inclusivity"
+              "inclusivity",
+              "visual",
+              "accessibility"
             ]
           },
           "severity": {
@@ -92,7 +94,9 @@
                     "enum": [
                       "rule",
                       "clause",
-                      "fact"
+                      "fact",
+                      "asset",
+                      "standard"
                     ]
                   },
                   "code": {
@@ -156,6 +160,46 @@
                 "type": "null"
               }
             ]
+          },
+          "box": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "w": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "h": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "w",
+                  "h"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -169,7 +213,8 @@
           "explanation",
           "source",
           "confidence",
-          "fix"
+          "fix",
+          "box"
         ],
         "additionalProperties": false
       }
@@ -264,6 +309,14 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
         },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "hi",
+            "hinglish"
+          ]
+        },
         "duration_ms": {
           "type": "integer",
           "minimum": -9007199254740991,
@@ -276,6 +329,7 @@
         "ai_downgraded",
         "ai_dropped_unanchored",
         "merged",
+        "language",
         "duration_ms"
       ],
       "additionalProperties": false

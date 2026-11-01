@@ -63,6 +63,10 @@ jobs:
         working-directory: services/analysis
       - name: Evaluation baseline (rules only, deterministic)
         run: python eval/run.py --no-ai
+      - name: Hindi and Hinglish baseline (rules only)
+        run: python eval/run.py --set hi --no-ai
+      - name: Image review baseline (colours, logos, alt text)
+        run: python eval/run.py --set images --no-ai
       - name: Evaluation with Gemini
         if: ${{ env.GEMINI_API_KEY != '' }}
         run: python eval/run.py

@@ -69,8 +69,10 @@ export const Span = z.object({
   end: z.number().int().min(0),
 });
 
+// "asset": a brand-kit asset (palette, logo) cited by image checks, code A-n.
+// "standard": an accessibility standard (WCAG success criterion), code e.g. "WCAG-1.4.3".
 export const FindingSource = z.object({
-  type: z.enum(["rule", "clause", "fact"]),
+  type: z.enum(["rule", "clause", "fact", "asset", "standard"]),
   code: z.string(),
   clause_code: z.string().nullable(),
   text: z.string(),
@@ -81,6 +83,15 @@ export const Fix = z.object({
   end: z.number().int().min(0),
   replacement: z.string(),
 });
+
+// Where an image finding is, as fractions of the image's width and height (0 to 1).
+export const Box = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0).max(1),
+  h: z.number().min(0).max(1),
+});
+export type Box = z.infer<typeof Box>;
 
 export const FindingDTO = z.object({
   fingerprint: z.string(),
@@ -94,6 +105,8 @@ export const FindingDTO = z.object({
   source: FindingSource.nullable(),
   confidence: z.number().min(0).max(1),
   fix: Fix.nullable(),
+  // Image findings: the region of the image. Text findings: null.
+  box: Box.nullable().default(null),
 });
 export type FindingDTO = z.infer<typeof FindingDTO>;
 
@@ -119,6 +132,8 @@ export const AnalyzeResponse = z.object({
     ai_downgraded: z.number().int(),
     ai_dropped_unanchored: z.number().int(),
     merged: z.number().int(),
+    // "hi" = Hindi in Devanagari, "hinglish" = Hindi in Roman letters; both are matched across scripts.
+    language: z.enum(["en", "hi", "hinglish"]),
     duration_ms: z.number().int(),
   }),
 });
@@ -173,3 +188,53 @@ export const SuggestRulesResponse = z.object({
   ),
 });
 export type SuggestRulesResponse = z.infer<typeof SuggestRulesResponse>;
+
+// Guideline health: a clearer wording for a clause people keep disputing, grounded in those cases.
+export const RewordCase = z.object({
+  id: z.string(),
+  quote: z.string(),
+  explanation: z.string(),
+  outcome: z.enum(["overridden", "disputed", "edited", "accepted"]),
+  reason: z.string().nullable(),
+});
+
+export const RewordClauseRequest = z.object({
+  clause: ClauseDTO,
+  cases: z.array(RewordCase).min(1),
+});
+export type RewordClauseRequest = z.infer<typeof RewordClauseRequest>;
+
+export const RewordClauseResponse = z.object({
+  text: z.string().min(1),
+  rationale: z.string(),
+  case_ids: z.array(z.string()),
+});
+export type RewordClauseResponse = z.infer<typeof RewordClauseResponse>;
+
+// Image review: a PNG/JPEG/WebP creative (sent as multipart "file") plus this request as JSON in "request".
+// Text in the image is read by the vision model and checked by the same text pipeline; colours,
+// logos, contrast and alt text are checked by deterministic code.
+export const ImageAsset = z.object({
+  code: z.string(),
+  name: z.string(),
+  type: z.string(),
+  colors: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)),
+  image_b64: z.string().nullable(), // approved logo file, base64
+});
+
+export const ImageAnalyzeRequest = z.object({
+  org_id: z.string(),
+  channel: Channel,
+  alt_text: z.string().nullable(),
+  brand_kit: AnalyzeRequest.shape.brand_kit,
+  assets: z.array(ImageAsset),
+  options: AnalyzeRequest.shape.options,
+});
+export type ImageAnalyzeRequest = z.infer<typeof ImageAnalyzeRequest>;
+
+export const ImageAnalyzeResponse = AnalyzeResponse.extend({
+  ocr_text: z.string(), // text read from the image; text findings' spans point into it
+  image: z.object({ width: z.number().int(), height: z.number().int() }),
+  notes: z.array(z.string()), // checks that could not run and why
+});
+export type ImageAnalyzeResponse = z.infer<typeof ImageAnalyzeResponse>;

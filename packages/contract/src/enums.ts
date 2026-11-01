@@ -67,6 +67,9 @@ export const FindingCategory = z.enum([
   "readability",
   "disclosure",
   "inclusivity",
+  // Image review: off-palette colours and logo misuse; contrast and missing alt text.
+  "visual",
+  "accessibility",
 ]);
 export type FindingCategory = z.infer<typeof FindingCategory>;
 
