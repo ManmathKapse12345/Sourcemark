@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Channel } from "@sourcemark/contract";
@@ -16,6 +16,10 @@ export default function NewContentPage() {
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [aiChecks, setAiChecks] = useState(true);
+  const [altText, setAltText] = useState("");
+  const isImage = file?.type.startsWith("image/") ?? false;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => { if (!file || !isImage) { setPreviewUrl(null); return; } const url = URL.createObjectURL(file); setPreviewUrl(url); return () => URL.revokeObjectURL(url); }, [file, isImage]);
 
   const rules = useQuery({
     queryKey: ["rules", orgId],
@@ -27,6 +31,7 @@ export default function NewContentPage() {
       if (file) {
         const f = new FormData();
         f.append("title", title); f.append("channel", channel); f.append("aiChecks", String(aiChecks)); f.append("file", file);
+        if (isImage && altText.trim()) f.append("altText", altText.trim());
         return orgApi<{ item: { id: string } }>("/content", { body: f });
       }
       return orgApi<{ item: { id: string } }>("/content", { body: { title, channel, body, aiChecks } });
@@ -53,10 +58,17 @@ export default function NewContentPage() {
           <b>Heads up for {channel.replace("_", " ")}:</b> {r.message}{r.config.any_of?.length ? ` ${r.config.at_start ? "Start" : "Include"} the post with ${r.config.any_of.join(" or ")}.` : ""}
         </p>
       ))}
-      {!file && <textarea className="input h-48" placeholder="Paste the text to review" value={body} onChange={(e) => setBody(e.target.value)} required />}
+      {!file && <textarea className="input h-48" placeholder="Paste the text to review (or try: Calm Barrier Moisturiser एक चमत्कार है।)" value={body} onChange={(e) => setBody(e.target.value)} required />}
       <div className="text-sm">
-        <label>Or upload a file (DOCX, PDF, TXT): <input type="file" accept=".docx,.pdf,.txt,.md" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+        <label>Or upload a file (PNG, JPEG, WebP, DOCX, PDF or TXT): <input type="file" accept=".png,.jpg,.jpeg,.webp,.docx,.pdf,.txt,.md" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
       </div>
+      {isImage && file && <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+        <p className="text-sm font-medium">Image preview</p>
+        {previewUrl && <img src={previewUrl} alt="Selected upload preview" className="max-h-72 rounded-lg object-contain" />}
+        <label className="block text-sm">Alt text <span className="text-slate-500">(describe the image and any text in it)</span>
+          <textarea className="input mt-1" value={altText} onChange={(e) => setAltText(e.target.value)} placeholder="Describe the image for people using screen readers" />
+        </label>
+      </div>}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={aiChecks} onChange={(e) => setAiChecks(e.target.checked)} />
         Use AI checks (uncheck to run rule checks only; nothing is sent to the LLM)

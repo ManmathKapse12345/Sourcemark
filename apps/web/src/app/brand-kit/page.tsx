@@ -6,6 +6,7 @@ import { Channel, FactKind, RuleType, Severity } from "@sourcemark/contract";
 import { useAuth, useOrgApi } from "@/lib/auth";
 import type { Asset, Clause, Fact, Guideline, Rule } from "@/lib/types";
 import { Badge, Empty, ErrorNote, Loading, SeverityBadge } from "@/components/ui";
+import { AssetPreview } from "@/components/AssetPreview";
 
 const TABS = ["Guidelines", "Rules", "Facts", "Assets"] as const;
 type Tab = (typeof TABS)[number];
@@ -353,16 +354,18 @@ function NewFact() {
 function Assets() {
   const { orgId, admin, orgApi, invalidate } = useKit();
   const [form, setForm] = useState({ name: "", type: "logo", url: "", notes: "" });
+  const [file, setFile] = useState<File | null>(null);
   const q = useQuery({ queryKey: ["assets", orgId], queryFn: () => orgApi<{ assets: Asset[] }>("/assets") });
-  const add = useMutation({ mutationFn: () => orgApi("/assets", { body: { ...form, url: form.url || undefined, notes: form.notes || undefined } }), onSuccess: () => { setForm({ name: "", type: "logo", url: "", notes: "" }); void invalidate("assets"); } });
+  const add = useMutation({ mutationFn: () => { const body = new FormData(); body.append("name", form.name); body.append("type", form.type); if (form.url) body.append("url", form.url); if (form.notes) body.append("notes", form.notes); if (file) body.append("file", file); return orgApi("/assets", { body }); }, onSuccess: () => { setForm({ name: "", type: "logo", url: "", notes: "" }); setFile(null); void invalidate("assets"); } });
   const del = useMutation({ mutationFn: (id: string) => orgApi(`/assets/${id}`, { method: "DELETE" }), onSuccess: () => invalidate("assets") });
   return (
     <div className="space-y-4">
+      <p className="text-sm text-slate-600">Image review checks colours against your palette and logos against the approved files below.</p>
       {admin && (
         <form className="card grid gap-3 sm:grid-cols-4" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
           <input className="input" placeholder="Name, e.g. Primary logo" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input className="input" placeholder="Type, e.g. logo or colour" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
-          <input className="input" placeholder="Link (optional)" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+          <input className="input" type="file" accept=".png,.jpg,.jpeg,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button className="btn-primary" disabled={add.isPending}>Add asset</button>
           <div className="sm:col-span-4"><ErrorNote error={add.error ?? del.error} /></div>
         </form>
@@ -371,8 +374,10 @@ function Assets() {
         <ul className="card divide-y divide-slate-200 !p-0">
           {q.data.assets.map((a) => (
             <li key={a.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0 flex-1">{a.name}</span>
+              <AssetPreview orgId={orgId!} asset={a} /><span className="w-12 font-mono text-xs text-brand">{a.code}</span><span className="min-w-0 flex-1">{a.name}</span>
               <Badge className="bg-slate-100 text-slate-600">{a.type}</Badge>
+              {a.colors?.map((c) => <span key={c} className="size-5 rounded-full border border-slate-300" style={{ backgroundColor: c }} title={c} />)}
+              {a.hasImage && <span className="text-xs text-green-800">Logo file</span>}
               {a.url && <a className="text-brand underline" href={a.url} target="_blank" rel="noreferrer">Open</a>}
               {admin && <button className="text-xs text-red-700 hover:underline" onClick={() => del.mutate(a.id)}>Remove</button>}
             </li>

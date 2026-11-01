@@ -5,11 +5,13 @@ import { useAuth, useOrgApi } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 import { diffWords } from "@/lib/diff";
 import type { AuditEntry, ContentDetail, Member, Run } from "@/lib/types";
-import { ErrorNote, Loading } from "@/components/ui";
+import { Badge, ErrorNote, Loading } from "@/components/ui";
 import { Verdict } from "@/components/Verdict";
 import { HighlightedBody } from "@/components/HighlightedBody";
 import { FindingCard } from "@/components/FindingCard";
 import { CheckingPanel } from "@/components/CheckingPanel";
+import { ImageReview } from "@/components/ImageReview";
+import { ImageCompare } from "@/components/ImageCompare";
 
 const ACTION_LABEL: Record<string, string> = {
   SUBMIT: "Check & send for review", RESOLVE: "Send for review", REVISE: "Edit again", REQUEST_CHANGES: "Ask for changes", APPROVE: "Approve for publishing", REJECT: "Reject",
@@ -35,6 +37,8 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");
   const [draft, setDraft] = useState<string | null>(null);
+  const [altDraft, setAltDraft] = useState<string | null>(null);
+  const [replacementImage, setReplacementImage] = useState<File | null>(null);
   const [tab, setTab] = useState<"discussion" | "history" | "changes">("discussion");
   const key = ["content-detail", id];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
@@ -54,7 +58,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
     onError: after,
   });
   const newVersion = useMutation({
-    mutationFn: (body: object) => orgApi(`/content/${id}/versions`, { body }),
+    mutationFn: (body: object | FormData) => orgApi(`/content/${id}/versions`, { body }),
     onSuccess: () => { setDraft(null); after(); },
     onError: after,
   });
@@ -77,6 +81,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
   const previous = d.versions[1];
   const run = d.latestRun;
   const findings = run?.findings ?? [];
+  const imagePost = d.item.kind === "image";
   const isAuthor = d.author.memberId === memberId;
   const editable = isAuthor && ["DRAFT", "CHECKING"].includes(d.item.state);
   const canRespond = d.item.state === "IN_REVIEW" ? !isAuthor : editable;
@@ -116,10 +121,22 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
       )}
       {run?.aiStatus === "disabled" && <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">AI checks are off for this content. Rule and fact checks only.</p>}
       <ErrorNote error={recheck.error} />
+      {run?.stats?.language && run.stats.language !== "en" && <Badge className="bg-brand-soft text-brand">{run.stats.language === "hi" ? "Hindi" : "Hinglish"}</Badge>}
+      {imagePost && run?.notes?.length ? <div className="rounded-xl bg-brand-soft px-4 py-3 text-sm"><b>Checks that could not run</b><ul className="mt-1 list-disc pl-5">{run.notes.map((n) => <li key={n}>{n}</li>)}</ul></div> : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="min-w-0 space-y-4">
-          {draft !== null ? (
+          {imagePost ? (
+            <div className="card space-y-4 !p-6">
+              <div className="flex flex-wrap items-center gap-2"><h2 className="mr-auto text-sm font-semibold">The image</h2><Badge className="bg-slate-100 text-slate-600">Image post</Badge></div>
+              <ImageReview orgId={orgId!} contentId={id} versionId={version.id} findings={findings} activeId={active} onSelect={select} />
+              {run?.ocrText && <div className="border-t border-slate-200 pt-4" lang={run.stats?.language === "hi" ? "hi" : undefined}><p className="mb-2 text-xs font-medium text-slate-500">Text read from the image</p><HighlightedBody body={run.ocrText} findings={findings} activeId={active} onSelect={select} /></div>}
+              {editable && <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3"><button className="btn-secondary" onClick={() => setAltDraft(version.altText ?? "")}>Edit alt text</button><label className="btn-secondary cursor-pointer">Upload a new image<input className="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp" onChange={(e) => { const f = e.target.files?.[0] ?? null; setReplacementImage(f); if (f) { const fd = new FormData(); fd.append("file", f); newVersion.mutate(fd); } }} /></label></div>}
+              {altDraft !== null && <div className="space-y-2"><textarea className="input" value={altDraft} onChange={(e) => setAltDraft(e.target.value)} placeholder="Describe the image for people using screen readers" /><div className="flex gap-2"><button className="btn-primary" disabled={newVersion.isPending} onClick={() => newVersion.mutate({ altText: altDraft })}>Save alt text</button><button className="btn-secondary" onClick={() => setAltDraft(null)}>Cancel</button></div></div>}
+              {replacementImage && newVersion.isPending && <p className="text-xs text-slate-500">Uploading the new image and running checks…</p>}
+              <ErrorNote error={newVersion.error} />
+            </div>
+          ) : draft !== null ? (
             <div className="card space-y-3 !p-6">
               <h2 className="text-sm font-semibold">Edit the text</h2>
               <textarea className="input min-h-40 !text-[17px] !leading-8" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Content text" />
@@ -142,7 +159,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
 
-          {run && run.rewrites.length > 0 && (
+          {!imagePost && run && run.rewrites.length > 0 && (
             <div className="card space-y-3">
               <h2 className="text-sm font-semibold">Smoother rewrites suggested</h2>
               {run.rewrites.map((r) => (
@@ -172,7 +189,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                   </div>
                 );
               })}
-              {editable && (
+              {editable && !imagePost && (
                 <button className="btn-secondary" disabled={newVersion.isPending} onClick={() => newVersion.mutate({ applyResponses: true })}>Apply accepted fixes as new version</button>
               )}
               {!d.availableActions.length && <p className="text-sm text-slate-500">{d.item.state === "APPROVED" ? "Nothing left to do. This content is approved and ready to publish." : d.item.state === "REJECTED" ? "This content was rejected and is closed." : "Nothing for you to do right now. It is with someone else."}</p>}
@@ -220,7 +237,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
             )}
 
             {tab === "changes" && previous && (
-              <p className="whitespace-pre-wrap text-[15px] leading-8">
+              imagePost ? <ImageCompare orgId={orgId!} contentId={id} currentVersionId={version.id} previousVersionId={previous.id} currentAlt={version.altText} previousAlt={previous.altText} /> : <p className="whitespace-pre-wrap text-[15px] leading-8">
                 {diffWords(previous.body, version.body).map((p, i) =>
                   p.type === "same" ? <span key={i}>{p.text}</span>
                   : p.type === "del" ? <del key={i} className="rounded bg-red-100 px-0.5 text-red-800">{p.text}</del>
@@ -239,7 +256,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
           )}
           {findings.map((f) => (
             <FindingCard key={f.id} f={f} body={version.body} active={active === f.id} canRespond={canRespond} contentId={id}
-              showDispute={!isAuthor} onSelect={() => setActive(f.id)} />
+              showDispute={!isAuthor} imagePost={imagePost} onSelect={() => setActive(f.id)} />
           ))}
         </aside>
       </div>
