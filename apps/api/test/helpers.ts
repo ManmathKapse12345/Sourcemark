@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AnalyzeRequest, AnalyzeResponse, FindingDTO } from "@sourcemark/contract";
+import type { AnalyzeRequest, AnalyzeResponse, FindingDTO, RewordClauseRequest } from "@sourcemark/contract";
 import { SignJWT } from "jose";
 import request from "supertest";
 import type { AnalysisClient } from "../src/analysis/client.js";
@@ -36,7 +36,7 @@ export class FakeAnalysis implements AnalysisClient {
       findings.push({
         fingerprint: fp, kind: "violation", category: "terminology", severity: "high", origins: ["rule"],
         span: { start, end: start + word.length }, quote: word, explanation: `${word} is not allowed.`,
-        source: { type: "rule", code: fp === "fp-cream" ? "R-4" : "R-1", clause_code: "G-1", text: "Clause text" },
+        source: { type: "rule", code: fp === "fp-cream" ? "R-4" : "R-1", clause_code: "G-1.1", text: "Use the approved product name." },
         confidence: 1, fix: fix === null ? null : { start, end: start + word.length, replacement: fix },
       });
     };
@@ -44,7 +44,7 @@ export class FakeAnalysis implements AnalysisClient {
     add("miracle", "fp-miracle", null);
     return {
       findings, rewrites: [], ai_status: "disabled", ai_error: null, model: null,
-      stats: { rule_findings: findings.length, ai_findings: 0, ai_downgraded: 0, ai_dropped_unanchored: 0, merged: 0, duration_ms: 1 },
+      stats: { rule_findings: findings.length, ai_findings: 0, ai_downgraded: 0, ai_dropped_unanchored: 0, merged: 0, language: "en", duration_ms: 1 },
     };
   }
   async parse() {
@@ -58,6 +58,11 @@ export class FakeAnalysis implements AnalysisClient {
   }
   async suggestRules() {
     return { suggestions: [] };
+  }
+  rewordCalls: RewordClauseRequest[] = [];
+  async rewordClause(req: RewordClauseRequest) {
+    this.rewordCalls.push(req);
+    return { text: `${req.clause.text} Factual descriptions are allowed.`, rationale: "People disputed factual wording.", case_ids: [req.cases[0]!.id] };
   }
 }
 

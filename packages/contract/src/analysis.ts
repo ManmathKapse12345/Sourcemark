@@ -119,6 +119,8 @@ export const AnalyzeResponse = z.object({
     ai_downgraded: z.number().int(),
     ai_dropped_unanchored: z.number().int(),
     merged: z.number().int(),
+    // "hi" = Hindi in Devanagari, "hinglish" = Hindi in Roman letters; both are matched across scripts.
+    language: z.enum(["en", "hi", "hinglish"]),
     duration_ms: z.number().int(),
   }),
 });
@@ -173,3 +175,25 @@ export const SuggestRulesResponse = z.object({
   ),
 });
 export type SuggestRulesResponse = z.infer<typeof SuggestRulesResponse>;
+
+// Guideline health: a clearer wording for a clause people keep disputing, grounded in those cases.
+export const RewordCase = z.object({
+  id: z.string(),
+  quote: z.string(),
+  explanation: z.string(),
+  outcome: z.enum(["overridden", "disputed", "edited", "accepted"]),
+  reason: z.string().nullable(),
+});
+
+export const RewordClauseRequest = z.object({
+  clause: ClauseDTO,
+  cases: z.array(RewordCase).min(1),
+});
+export type RewordClauseRequest = z.infer<typeof RewordClauseRequest>;
+
+export const RewordClauseResponse = z.object({
+  text: z.string().min(1),
+  rationale: z.string(),
+  case_ids: z.array(z.string()),
+});
+export type RewordClauseResponse = z.infer<typeof RewordClauseResponse>;

@@ -264,6 +264,14 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
         },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "hi",
+            "hinglish"
+          ]
+        },
         "duration_ms": {
           "type": "integer",
           "minimum": -9007199254740991,
@@ -276,6 +284,7 @@
         "ai_downgraded",
         "ai_dropped_unanchored",
         "merged",
+        "language",
         "duration_ms"
       ],
       "additionalProperties": false

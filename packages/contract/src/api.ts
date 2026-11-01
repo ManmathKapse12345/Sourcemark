@@ -131,3 +131,8 @@ export const CommentBody = z.object({
   findingId: z.string().optional(),
   versionId: z.string().optional(),
 });
+
+// Guideline health: save a clearer wording as a new draft version of the clause's guideline.
+export const RewordClauseBody = z.object({
+  text: z.string().trim().min(1).max(5000),
+});

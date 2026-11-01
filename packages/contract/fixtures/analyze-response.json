@@ -51,6 +51,7 @@
     "ai_downgraded": 1,
     "ai_dropped_unanchored": 0,
     "merged": 1,
+    "language": "en",
     "duration_ms": 1830
   }
 }

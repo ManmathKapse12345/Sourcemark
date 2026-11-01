@@ -18,6 +18,8 @@ const names = [
   "EmbedResponse",
   "SuggestRulesRequest",
   "SuggestRulesResponse",
+  "RewordClauseRequest",
+  "RewordClauseResponse",
 ];
 
 for (const name of names) {

@@ -126,6 +126,7 @@ class Stats(Strict):
     ai_downgraded: int
     ai_dropped_unanchored: int
     merged: int
+    language: Literal["en", "hi", "hinglish"]
     duration_ms: int
 
 
@@ -180,3 +181,22 @@ class RuleSuggestion(Strict):
 
 class SuggestRulesResponse(Strict):
     suggestions: list[RuleSuggestion]
+
+
+class RewordCase(Strict):
+    id: str
+    quote: str
+    explanation: str
+    outcome: Literal["overridden", "disputed", "edited", "accepted"]
+    reason: str | None
+
+
+class RewordClauseRequest(Strict):
+    clause: ClauseDTO
+    cases: list[RewordCase] = Field(min_length=1)
+
+
+class RewordClauseResponse(Strict):
+    text: str = Field(min_length=1)
+    rationale: str
+    case_ids: list[str]
