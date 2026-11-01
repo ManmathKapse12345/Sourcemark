@@ -37,6 +37,7 @@ npm run dev:web                      # http://localhost:3000
 | `/content/new` | Creator | Paste text or upload DOCX/PDF/TXT; option to run rule checks only. Shows channel hints from the workspace's disclosure rules (for example "start creator posts with #ad"). Other roles see an explanation instead. |
 | `/content/:id` | member | Review screen (below). |
 | `/brand-kit` | member (edits: Admin) | Guidelines (upload or paste, review and edit clauses, publish, start a new version, suggest rules), rules (create, change severity, switch on/off), facts (add, switch off, show old values), assets. Tabs are linkable: `/brand-kit?tab=Rules`. |
+| `/guideline-health` | Admin | Ranked clause health, challenge cases, clearer wording suggestions, and draft-version saving. |
 | `/team` | Admin | Add members by email, change roles. |
 | `/audit` | Admin | Organisation-wide audit log. |
 
@@ -140,10 +141,21 @@ Set the project root to `apps/web`, the install command to `npm ci` at the repos
 the two Supabase variables. Add the Vercel domain to the API's `CORS_ORIGINS`. In Supabase, add
 `https://<domain>/login` and `https://<domain>/reset-password` to the allowed redirect URLs.
 
+## Round 3 additions
+
+Image posts accept PNG, JPEG and WebP uploads, optional alt text, authenticated image previews, finding boxes,
+OCR text highlights, image version comparison, asset/logo citations, and notes for skipped checks. Image versions
+are changed through “Edit alt text” or “Upload a new image”; text rewrites are intentionally not applied to images.
+The review screen shows Hindi/Hinglish detection and uses a Devanagari-capable font fallback.
+
+Admins can open `/guideline-health` to see ranked clauses, decision cases, challenge rates, and clearer-wording
+suggestions. Suggestions remain editable and save into the existing Brand Kit draft/publish workflow.
+
 ## Known gaps
 
 - Rule configs can be created and switched on or off, but an existing rule's config (for example its word list) can't yet be edited in the UI.
 - "Use this rewrite" and "Suggest rules" need the AI service (`GEMINI_API_KEY`); without it the page explains that.
-- Image review, guideline health and insights are Round 3 features and have no screens yet.
+- Rule configuration editing is still limited to the fields exposed by the existing controls.
+- A live end-to-end check requires the deployed API, analysis service, database, and seeded workspace.
 - The overview page's hero art is generated in code. A commissioned or AI-generated image can replace
   `InkShader` inside the same frame.

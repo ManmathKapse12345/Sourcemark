@@ -2,7 +2,7 @@
 
 /* Two themes. Utilities read runtime variables, so the same classes render in light or dark. */
 @theme inline {
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --color-white: var(--c-white);

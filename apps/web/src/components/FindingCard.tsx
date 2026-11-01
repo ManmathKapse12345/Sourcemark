@@ -6,11 +6,11 @@ import type { Finding } from "@/lib/types";
 import { Badge, ErrorNote } from "./ui";
 import { sentencePreview } from "@/lib/diff";
 
-const SOURCE_LABEL: Record<string, string> = { rule: "Your brand rule", clause: "Your guideline says", fact: "Your approved fact sheet says" };
-const CATEGORY: Record<string, string> = { terminology: "Wording", fact: "Facts & prices", claim: "Claim", tone: "Tone", style: "Style", readability: "Readability", disclosure: "Disclosure", inclusivity: "Inclusive language" };
+const SOURCE_LABEL: Record<string, string> = { rule: "Your brand rule", clause: "Your guideline says", fact: "Your approved fact sheet says", asset: "Brand asset", standard: "Accessibility" };
+const CATEGORY: Record<string, string> = { terminology: "Wording", fact: "Facts & prices", claim: "Claim", tone: "Tone", style: "Style", readability: "Readability", disclosure: "Disclosure", inclusivity: "Inclusive language", visual: "Visual", accessibility: "Accessibility" };
 
-export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false }: {
-  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean;
+export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false, imagePost = false }: {
+  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean; imagePost?: boolean;
 }) {
   const orgApi = useOrgApi();
   const qc = useQueryClient();
@@ -51,9 +51,11 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
 
       {f.fixReplacement != null && f.quote && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2.5 text-sm">
+          {imagePost && <span className="w-full text-xs font-medium text-slate-500">Suggested wording</span>}
           <span className="rounded bg-red-100 px-1.5 text-red-800 line-through">{f.quote}</span>
           <span aria-hidden className="text-slate-500">→</span>
           <span className="rounded bg-green-100 px-1.5 font-medium text-green-800">{f.fixReplacement || "(remove)"}</span>
+          {imagePost && <button className="ml-auto text-xs text-brand underline" type="button" onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(f.fixReplacement ?? ""); }}>Copy</button>}
         </div>
       )}
 

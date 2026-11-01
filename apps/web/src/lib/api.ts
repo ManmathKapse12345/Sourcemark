@@ -46,3 +46,10 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   return data as T;
 }
+
+export async function authenticatedBlobUrl(path: string): Promise<string> {
+  const token = await getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new Error("The image could not be loaded. Try again.");
+  return URL.createObjectURL(await res.blob());
+}
