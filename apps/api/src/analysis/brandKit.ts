@@ -1,4 +1,4 @@
-import type { AnalyzeRequest } from "@sourcemark/contract";
+import type { AnalyzeRequest, ImageAnalyzeRequest } from "@sourcemark/contract";
 import type { Db } from "../db.js";
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -40,4 +40,16 @@ export async function loadBrandKit(db: Db, orgId: string): Promise<AnalyzeReques
     })),
     clauses,
   };
+}
+
+// Brand assets for image review: palette colours, and approved logo files sent as base64.
+export async function loadImageAssets(db: Db, orgId: string): Promise<ImageAnalyzeRequest["assets"]> {
+  const assets = await db.asset.findMany({ where: { orgId }, orderBy: { createdAt: "asc" } });
+  return assets.map((a) => ({
+    code: a.code ?? a.id,
+    name: a.name,
+    type: a.type,
+    colors: a.colors,
+    image_b64: a.imageData ? Buffer.from(a.imageData).toString("base64") : null,
+  }));
 }

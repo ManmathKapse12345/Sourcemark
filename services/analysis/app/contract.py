@@ -18,7 +18,8 @@ RuleType = Literal["banned_term", "terminology", "all_caps", "punctuation", "lon
 FactKind = Literal["money", "quantity", "name", "date", "claim"]
 Severity = Literal["high", "medium", "low"]
 FindingKind = Literal["violation", "needs_human_check"]
-Category = Literal["terminology", "fact", "claim", "tone", "style", "readability", "disclosure", "inclusivity"]
+Category = Literal["terminology", "fact", "claim", "tone", "style", "readability", "disclosure", "inclusivity", "visual",
+                   "accessibility"]
 Origin = Literal["rule", "ai"]
 
 ISO_DATE = r"^\d{4}-\d{2}-\d{2}$"
@@ -85,7 +86,7 @@ class Span(Strict):
 
 
 class FindingSource(Strict):
-    type: Literal["rule", "clause", "fact"]
+    type: Literal["rule", "clause", "fact", "asset", "standard"]
     code: str
     clause_code: str | None
     text: str
@@ -95,6 +96,14 @@ class Fix(Strict):
     start: int = Field(ge=0)
     end: int = Field(ge=0)
     replacement: str
+
+
+class Box(Strict):
+    """A region of an image, as fractions of its width and height."""
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(ge=0, le=1)
+    h: float = Field(ge=0, le=1)
 
 
 class FindingDTO(Strict):
@@ -109,6 +118,7 @@ class FindingDTO(Strict):
     source: FindingSource | None
     confidence: float = Field(ge=0, le=1)
     fix: Fix | None
+    box: Box | None = None
 
 
 class RewriteDTO(Strict):
@@ -200,3 +210,34 @@ class RewordClauseResponse(Strict):
     text: str = Field(min_length=1)
     rationale: str
     case_ids: list[str]
+
+
+HEX = r"^#[0-9a-fA-F]{6}$"
+
+
+class ImageAsset(Strict):
+    code: str
+    name: str
+    type: str
+    colors: list[str] = Field(default_factory=list)
+    image_b64: str | None = None
+
+
+class ImageAnalyzeRequest(Strict):
+    org_id: str
+    channel: Channel
+    alt_text: str | None
+    brand_kit: BrandKit
+    assets: list[ImageAsset]
+    options: Options
+
+
+class ImageSize(Strict):
+    width: int
+    height: int
+
+
+class ImageAnalyzeResponse(AnalyzeResponse):
+    ocr_text: str
+    image: ImageSize
+    notes: list[str]

@@ -4,15 +4,16 @@ Pre-publication review of content against an organisation's own approved guideli
 Every issue cites the exact rule or fact behind it; anything the system cannot ground in an approved
 source is marked "needs human check", never reported as a violation. People make every decision.
 
-This repository holds the Round 2 core: brand kit, text and document review, cited findings and fixes,
-roles and approvals, version history and audit log, the evaluation harness, and deployment.
+This repository holds the Round 2 core (brand kit, text and document review, cited findings and fixes, roles and
+approvals, version history and audit log, the evaluation harness, deployment) and the Round 3 back end: image review,
+guideline health, and Hindi and Hinglish review. The frontend work for Round 3 is listed in `docs/ROUND3-FRONTEND.md`.
 
 ```
 apps/web/            Next.js frontend (Aditya)          — overview page, sign-in, review queue and screen, brand kit
 apps/api/            Express + TypeScript + Prisma      — workflow, roles, versions, audit, brand kit
 services/analysis/   FastAPI (Python), API-only (token) — parsing, rules, facts, retrieval, Gemini, citation check
 packages/contract/   Zod schemas shared by both sides   — exported to JSON Schema for the Python tests
-eval/                demo brand kit, 30-piece labelled test set, scoring script
+eval/                demo brand kit, labelled test sets (English, Hindi/Hinglish, images), scoring script
 docs/API.md          endpoint reference for the frontend
 docs/FRONTEND.md     how the frontend is built, run and deployed
 ```
@@ -32,6 +33,19 @@ docs/FRONTEND.md     how the frontend is built, run and deployed
    that the model invented are dropped.
 6. **Merge and fix.** A rule and the AI flagging the same words become one finding with both origins.
    Sentence rewrites are re-checked by the rules and discarded if they still break them (`app/rewrite.py`).
+
+**Image posts** (`app/images.py`): dominant colours are compared with the brand palette (CIEDE2000), the approved
+logo is located with ORB features and an affine fit and checked for stretching, rotation and recolouring, text
+contrast follows WCAG 2.1, and missing alt text is reported. The vision model only reads the text and where it is;
+that text goes through the checks above, so a wrong price on a poster is caught like one in a caption.
+
+**Hindi and Hinglish** (`app/indic.py`): the language is detected, and rules, product names and fact subjects match
+across Devanagari and Roman spellings by phonetic key ("chamatkar", "chamatkaar", "चमत्कार"). Indian amounts (₹, Rs,
+रु, lakh, crore, Devanagari digits) are understood, and the model answers in the draft's language.
+
+**Guideline health** (`apps/api/src/health/guidelineHealth.ts`): clauses are ranked by how often people dispute or
+override their findings, flagged when well above the organisation's average, and an admin can ask for a clearer
+wording grounded in those cases and save it as a draft guideline version.
 
 Workflow states are enforced by the API (`apps/api/src/workflow/stateMachine.ts`): a creator can submit but
 never approve, authors can never approve their own content, and the AI never changes a state. Findings are
@@ -68,6 +82,8 @@ npm test                                     # contract + API (unit and integrat
 cd services/analysis && .venv/Scripts/python -m pytest -q
 services/analysis/.venv/Scripts/python eval/run.py --no-ai     # deterministic baseline
 services/analysis/.venv/Scripts/python eval/run.py             # full pipeline (needs GEMINI_API_KEY)
+services/analysis/.venv/Scripts/python eval/run.py --set hi     # Hindi and Hinglish (20 pieces)
+services/analysis/.venv/Scripts/python eval/run.py --set images # image review (15 posts; --no-ai: colours, logos, alt text)
 ```
 
 The evaluation reports precision, recall (split into rule-checkable and judgement errors), the false-alarm

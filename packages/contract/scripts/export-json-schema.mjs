@@ -20,6 +20,8 @@ const names = [
   "SuggestRulesResponse",
   "RewordClauseRequest",
   "RewordClauseResponse",
+  "ImageAnalyzeRequest",
+  "ImageAnalyzeResponse",
 ];
 
 for (const name of names) {

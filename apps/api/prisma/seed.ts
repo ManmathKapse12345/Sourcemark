@@ -81,10 +81,16 @@ async function main() {
         { orgId: ORG, kind: "rule", value: max(kit.rules.map((r) => r.code), "R-") },
         { orgId: ORG, kind: "fact", value: max(kit.facts.map((f) => f.code), "F-") },
         { orgId: ORG, kind: "guideline", value: 1 },
+        { orgId: ORG, kind: "asset", value: 2 },
       ],
     });
     await tx.asset.create({
-      data: { orgId: ORG, name: "Northfern palette", type: "palette", colors: ["#1F4D3A", "#F4EFE6", "#C9A66B", "#2B2B2B"] },
+      data: { orgId: ORG, code: "A-1", name: "Northfern palette", type: "palette", colors: ["#1F4D3A", "#F4EFE6", "#C9A66B", "#2B2B2B"] },
+    });
+    // The approved logo file, so image review can check logo use (eval/images/make_images.py draws it).
+    await tx.asset.create({
+      data: { orgId: ORG, code: "A-2", name: "Northfern logo", type: "logo", imageMime: "image/png",
+              imageData: new Uint8Array(readFileSync(join(root, "eval", "images", "northfern-logo.png"))) },
     });
 
     const creator = `mem_creator_${ORG}`;
@@ -93,6 +99,15 @@ async function main() {
     });
     await tx.contentVersion.create({
       data: { orgId: ORG, contentItemId: item.id, number: 1, body: "Our Calm Barrier Cream is a MIRACLE, now just ₹499!!", createdById: creator },
+    });
+    // An image post to try image review on: the poster shows last season's price.
+    const poster = await tx.contentItem.create({
+      data: { orgId: ORG, title: "Festive poster", channel: "instagram", kind: "image", authorId: creator },
+    });
+    await tx.contentVersion.create({
+      data: { orgId: ORG, contentItemId: poster.id, number: 1, body: "", altText: null, createdById: creator,
+              sourceFileName: "festive-poster.png", imageMime: "image/png",
+              imageData: new Uint8Array(readFileSync(join(root, "eval", "images", "i06.png"))) },
     });
     await seedReviewHistory(tx);
     await tx.auditLog.create({ data: { orgId: ORG, actorId: null, action: "seed.loaded", entityType: "Organisation", entityId: ORG } });

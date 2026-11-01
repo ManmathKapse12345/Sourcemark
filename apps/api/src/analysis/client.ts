@@ -2,11 +2,13 @@ import {
   AnalyzeResponse,
   EmbedResponse,
   ExtractGuidelineResponse,
+  ImageAnalyzeResponse,
   ParseResponse,
   RewordClauseResponse,
   SuggestRulesResponse,
   type AnalyzeRequest,
   type EmbedRequest,
+  type ImageAnalyzeRequest,
   type RewordClauseRequest,
   type SuggestRulesRequest,
 } from "@sourcemark/contract";
@@ -21,6 +23,7 @@ export interface UploadedFile {
 
 export interface AnalysisClient {
   analyze(req: AnalyzeRequest): Promise<AnalyzeResponse>;
+  analyzeImage(req: ImageAnalyzeRequest, image: UploadedFile): Promise<ImageAnalyzeResponse>;
   parse(file: UploadedFile): Promise<ParseResponse>;
   extractGuideline(input: { file?: UploadedFile; text?: string; prefix: string }): Promise<ExtractGuidelineResponse>;
   embed(req: EmbedRequest): Promise<EmbedResponse | null>; // null: embeddings not configured
@@ -83,6 +86,7 @@ export function createAnalysisClient(opts: { baseUrl: string; token: string; tim
 
   return {
     analyze: (req) => call("/analyze", json(req), AnalyzeResponse),
+    analyzeImage: (req, image) => call("/images/analyze", form(image, { request: JSON.stringify(req) }), ImageAnalyzeResponse),
     parse: (file) => call("/parse", form(file), ParseResponse),
     extractGuideline: ({ file, text, prefix }) => {
       if (file) return call("/guidelines/extract", form(file, { prefix }), ExtractGuidelineResponse);

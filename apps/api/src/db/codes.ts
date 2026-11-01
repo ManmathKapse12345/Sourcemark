@@ -17,3 +17,4 @@ export async function guidelinePrefix(db: Db, orgId: string) {
   const n = await nextNumber(db, orgId, "guideline");
   return n === 1 ? "G" : `G${n}`;
 }
+export const assetCode = async (db: Db, orgId: string) => `A-${await nextNumber(db, orgId, "asset")}`;

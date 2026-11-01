@@ -6,7 +6,7 @@ import hashlib
 from collections import Counter
 from dataclasses import dataclass, field
 
-from .contract import ClauseDTO, FindingDTO, FindingSource, Fix, RuleDTO, Span
+from .contract import Box, ClauseDTO, FindingDTO, FindingSource, Fix, RuleDTO, Span
 from .text import normalize
 
 
@@ -23,6 +23,7 @@ class Finding:
     source: FindingSource | None
     confidence: float = 1.0
     fix: Fix | None = None
+    box: Box | None = None  # image findings: where in the image
     fingerprint: str = field(default="")
 
     @property
@@ -49,6 +50,7 @@ class Finding:
             source=self.source,
             confidence=round(self.confidence, 3),
             fix=self.fix,
+            box=self.box,
         )
 
 

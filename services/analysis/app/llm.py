@@ -49,6 +49,8 @@ class LLM(Protocol):
 
     def generate_json(self, system: str, prompt: str, schema: type[T]) -> T: ...
 
+    def generate_json_with_image(self, system: str, prompt: str, image: bytes, mime_type: str, schema: type[T]) -> T: ...
+
     def embed(self, texts: list[str], task: Literal["document", "query"]) -> list[list[float]]: ...
 
 
@@ -93,12 +95,18 @@ class GeminiLLM:
             delay *= 2
 
     def generate_json(self, system: str, prompt: str, schema: type[T]) -> T:
+        return self._generate(system, prompt, schema)
+
+    def generate_json_with_image(self, system: str, prompt: str, image: bytes, mime_type: str, schema: type[T]) -> T:
+        return self._generate(system, [self._types.Part.from_bytes(data=image, mime_type=mime_type), prompt], schema)
+
+    def _generate(self, system: str, contents, schema: type[T]) -> T:
         types = self._types
 
         def call() -> T:
             resp = self.client.models.generate_content(
                 model=self.model,
-                contents=prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     response_mime_type="application/json",

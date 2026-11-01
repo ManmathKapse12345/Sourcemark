@@ -63,5 +63,9 @@ class FakeLLM:
         data = self.responses.get(schema.__name__, {"issues": [], "rewrites": [], "suggestions": []})
         return schema.model_validate(data)
 
+    def generate_json_with_image(self, system, prompt, image, mime_type, schema):
+        self.images = getattr(self, "images", []) + [(mime_type, len(image))]
+        return self.generate_json(system, prompt, schema)
+
     def embed(self, texts, task):
         return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
