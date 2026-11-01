@@ -9,6 +9,8 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from .config import get_settings
 from .contract import (
@@ -17,12 +19,15 @@ from .contract import (
     EmbedRequest,
     EmbedResponse,
     ExtractGuidelineResponse,
+    ImageAnalyzeRequest,
+    ImageAnalyzeResponse,
     ParseResponse,
     RewordClauseRequest,
     RewordClauseResponse,
     SuggestRulesRequest,
     SuggestRulesResponse,
 )
+from .images import ImageError, analyze_image
 from .llm import LLM, GeminiLLM, LLMError
 from .parsing import MAX_BYTES, ParseError, extract_clauses, extract_text
 from .pipeline import analyze
@@ -133,3 +138,17 @@ def reword_endpoint(req: RewordClauseRequest) -> RewordClauseResponse:
         return reword_clause(req, llm)
     except LLMError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+# Image review: the creative as multipart "file", the request (brand kit, assets, alt text) as JSON in "request".
+@app.post("/images/analyze", response_model=ImageAnalyzeResponse, dependencies=[Auth])
+async def image_endpoint(request: Annotated[str, Form()], file: UploadFile = File(...)) -> ImageAnalyzeResponse:
+    data = await _read_upload(file)
+    try:
+        req = ImageAnalyzeRequest.model_validate_json(request)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False)) from e
+    try:
+        return await run_in_threadpool(analyze_image, req, data, get_llm(), get_retriever(), get_settings())
+    except ImageError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e

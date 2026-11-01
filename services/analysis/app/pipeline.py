@@ -25,10 +25,13 @@ log = logging.getLogger(__name__)
 
 def analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, settings: Settings) -> AnalyzeResponse:
     with time_budget(settings.analysis_budget_s):
-        return _analyze(req, llm, retriever, settings)
+        return analyze_text(req, llm, retriever, settings)
 
 
-def _analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, settings: Settings) -> AnalyzeResponse:
+def analyze_text(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, settings: Settings,
+                 rewrites: bool = True) -> AnalyzeResponse:
+    """The text review, inside the caller's time budget. Image review reuses it on the text in the
+    image, without sentence rewrites (the writer changes the image, not a sentence)."""
     started = time.perf_counter()
     text = req.content.text
     channel = req.content.channel
@@ -65,13 +68,13 @@ def _analyze(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | None, 
     assign_fingerprints(findings)
     findings.sort(key=lambda f: (f.start if f.start is not None else -1, f.end or 0))
 
-    rewrites = []
-    if ai_status == "ok" and llm is not None:
-        rewrites = propose_rewrites(text, channel, findings, kit, as_of, llm, language)
+    proposed = []
+    if rewrites and ai_status == "ok" and llm is not None:
+        proposed = propose_rewrites(text, channel, findings, kit, as_of, llm, language)
 
     return AnalyzeResponse(
         findings=[f.to_dto() for f in findings],
-        rewrites=rewrites,
+        rewrites=proposed,
         ai_status=ai_status,  # type: ignore[arg-type]
         ai_error=ai_error,
         model=model,

@@ -88,8 +88,11 @@ export const CreateAssetBody = z.object({
 export const CreateContentBody = z.object({
   title: z.string().trim().min(1).max(200),
   channel: Channel,
-  // Either body text, or a DOCX/PDF/TXT file sent as multipart field "file".
+  // Either body text, or a file sent as multipart field "file": DOCX/PDF/TXT (its text is reviewed)
+  // or PNG/JPEG/WebP (an image post: colours, logos, contrast, alt text and the text in the image).
   body: z.string().min(1).max(100_000).optional(),
+  // Image posts: the text alternative shown to screen readers.
+  altText: z.string().trim().max(1000).optional(),
   // false: rule checks only, the draft is never sent to the external LLM.
   aiChecks: z.boolean().default(true),
 });
@@ -101,9 +104,11 @@ export const CreateVersionBody = z
     applyResponses: z.boolean().optional(),
     // Sentence-level rewrites to apply, by id from the latest run.
     applyRewriteIds: z.array(z.string()).optional(),
+    // Image posts: new alt text (with or without a new image in multipart field "file").
+    altText: z.string().trim().max(1000).optional(),
   })
-  .refine((b) => b.body !== undefined || b.applyResponses || b.applyRewriteIds?.length, {
-    message: "Provide body, applyResponses or applyRewriteIds",
+  .refine((b) => b.body !== undefined || b.applyResponses || b.applyRewriteIds?.length || b.altText !== undefined, {
+    message: "Provide body, applyResponses, applyRewriteIds or altText",
   });
 
 export const TransitionBody = z.object({
