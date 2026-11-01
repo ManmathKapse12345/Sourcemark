@@ -3,9 +3,11 @@ import {
   EmbedResponse,
   ExtractGuidelineResponse,
   ParseResponse,
+  RewordClauseResponse,
   SuggestRulesResponse,
   type AnalyzeRequest,
   type EmbedRequest,
+  type RewordClauseRequest,
   type SuggestRulesRequest,
 } from "@sourcemark/contract";
 import type { z } from "zod";
@@ -23,6 +25,7 @@ export interface AnalysisClient {
   extractGuideline(input: { file?: UploadedFile; text?: string; prefix: string }): Promise<ExtractGuidelineResponse>;
   embed(req: EmbedRequest): Promise<EmbedResponse | null>; // null: embeddings not configured
   suggestRules(req: SuggestRulesRequest): Promise<SuggestRulesResponse>;
+  rewordClause(req: RewordClauseRequest): Promise<RewordClauseResponse>;
   warm?(): void; // fire-and-forget ping so a sleeping service is awake before the next review
 }
 
@@ -98,6 +101,7 @@ export function createAnalysisClient(opts: { baseUrl: string; token: string; tim
       }
     },
     suggestRules: (req) => call("/rules/suggest", json(req), SuggestRulesResponse),
+    rewordClause: (req) => call("/guidelines/reword", json(req), RewordClauseResponse),
     warm: () => {
       if (Date.now() - lastWarm < WARM_EVERY_MS) return;
       lastWarm = Date.now();

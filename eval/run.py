@@ -1,7 +1,8 @@
 """Scores the analysis pipeline on the labelled test set.
 
-    python eval/run.py --no-ai     # rules and fact checks only (deterministic, no API key)
-    python eval/run.py             # full pipeline with Gemini (needs GEMINI_API_KEY)
+    python eval/run.py --no-ai              # rules and fact checks only (deterministic, no API key)
+    python eval/run.py                      # full pipeline with Gemini (needs GEMINI_API_KEY)
+    python eval/run.py --set hi [--no-ai]   # the Hindi and Hinglish set (testset_hi.jsonl)
 
 Reports precision, recall, the false-alarm rate on clean pieces, citation validity and timing,
 and writes a JSON report to eval/results/.
@@ -44,8 +45,12 @@ def load_kit() -> BrandKit:
     )
 
 
-def load_tests() -> list[dict]:
-    return [json.loads(line) for line in (ROOT / "testset.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+SETS = {"en": "testset.jsonl", "hi": "testset_hi.jsonl"}
+
+
+def load_tests(name: str = "en") -> list[dict]:
+    path = ROOT / SETS[name]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def settings(ai: bool) -> Settings:
@@ -122,6 +127,7 @@ def citation_valid(f, kit: BrandKit) -> bool:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-ai", action="store_true", help="rules and fact checks only")
+    ap.add_argument("--set", choices=sorted(SETS), default="en", help="en: English set, hi: Hindi and Hinglish set")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
@@ -131,7 +137,7 @@ def main() -> None:
         sys.exit("GEMINI_API_KEY is not set. Use --no-ai for the rules-only baseline.")
     cfg = settings(use_ai)
     kit = load_kit()
-    tests = load_tests()[: args.limit]
+    tests = load_tests(args.set)[: args.limit]
 
     llm = retriever = None
     if use_ai:
@@ -203,6 +209,7 @@ def main() -> None:
     precision = tp / (tp + fp) if tp + fp else 1.0
     recall = tp / (tp + fn) if tp + fn else 1.0
     summary = {
+        "set": args.set,
         "mode": "full (rules + AI)" if use_ai else "rules only",
         "model": cfg.gemini_model if use_ai else None,
         "pieces": len(tests),
@@ -229,7 +236,8 @@ def main() -> None:
     out_dir = ROOT / "results"
     out_dir.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = out_dir / f"{stamp}-{'full' if use_ai else 'rules'}.json"
+    suffix = "" if args.set == "en" else f"-{args.set}"
+    path = out_dir / f"{stamp}-{'full' if use_ai else 'rules'}{suffix}.json"
     path.write_text(json.dumps({"summary": summary, "pieces": pieces}, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nReport: {path}")
 

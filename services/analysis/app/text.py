@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from .indic import WORD_CHARS, find_term_any_script
+
 ABBREVIATIONS = {
     "dr", "mr", "mrs", "ms", "prof", "rs", "st", "no", "vs", "etc", "e.g", "i.e", "inc", "ltd", "jr", "sr",
     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec", "approx", "dept",
@@ -49,9 +51,9 @@ def sentence_spans(text: str) -> list[tuple[int, int]]:
             start = i + 1
             i += 1
             continue
-        if ch in ".!?":
+        if ch in ".!?।॥":
             j = i
-            while j < n and text[j] in ".!?":
+            while j < n and text[j] in ".!?।॥":
                 j += 1
             while j < n and text[j] in _CLOSERS:
                 j += 1
@@ -80,11 +82,17 @@ def term_pattern(term: str, case_sensitive: bool = False) -> re.Pattern[str]:
     parts = [re.escape(p) for p in term.split()]
     body = r"\s+".join(parts)
     flags = 0 if case_sensitive else re.IGNORECASE
-    return re.compile(rf"(?<![\w#@]){body}(?!\w)", flags)
+    # Hindi vowel signs are not \w, so word boundaries use WORD_CHARS.
+    return re.compile(rf"(?<![{WORD_CHARS}#@]){body}(?![{WORD_CHARS}])", flags)
 
 
-def find_term(text: str, term: str, case_sensitive: bool = False) -> list[tuple[int, int]]:
-    return [(m.start(), m.end()) for m in term_pattern(term, case_sensitive).finditer(text)]
+def find_term(text: str, term: str, case_sensitive: bool = False, any_script: bool = False) -> list[tuple[int, int]]:
+    """Whole-word matches. With any_script (Hindi and Hinglish content), the term also matches its
+    Devanagari or Roman spelling and common spelling variants."""
+    found = [(m.start(), m.end()) for m in term_pattern(term, case_sensitive).finditer(text)]
+    if any_script:
+        found += [s for s in find_term_any_script(text, term) if not any(overlaps(s, f) for f in found)]
+    return sorted(found)
 
 
 def overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
@@ -116,7 +124,7 @@ def locate(text: str, quote: str, start_at: int = 0) -> tuple[int, int] | None:
     return _locate_inflected(text, q, start_at)
 
 
-WORD = re.compile(r"\w+(?:'\w+)*")
+WORD = re.compile(rf"[{WORD_CHARS}]+(?:'[{WORD_CHARS}]+)*")
 _ENDINGS = {"s", "es", "ed", "d", "ing", "'s"}
 
 

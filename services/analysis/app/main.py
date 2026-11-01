@@ -18,6 +18,8 @@ from .contract import (
     EmbedResponse,
     ExtractGuidelineResponse,
     ParseResponse,
+    RewordClauseRequest,
+    RewordClauseResponse,
     SuggestRulesRequest,
     SuggestRulesResponse,
 )
@@ -25,6 +27,7 @@ from .llm import LLM, GeminiLLM, LLMError
 from .parsing import MAX_BYTES, ParseError, extract_clauses, extract_text
 from .pipeline import analyze
 from .retrieval import PgVectorRetriever, Retriever
+from .reword import reword_clause
 from .suggest import suggest_rules
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -117,5 +120,16 @@ def suggest_endpoint(req: SuggestRulesRequest) -> SuggestRulesResponse:
         raise HTTPException(status_code=503, detail="Rule suggestions need GEMINI_API_KEY")
     try:
         return SuggestRulesResponse(suggestions=suggest_rules(req.clauses, llm))
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@app.post("/guidelines/reword", response_model=RewordClauseResponse, dependencies=[Auth])
+def reword_endpoint(req: RewordClauseRequest) -> RewordClauseResponse:
+    llm = get_llm()
+    if llm is None:
+        raise HTTPException(status_code=503, detail="Rewording needs GEMINI_API_KEY")
+    try:
+        return reword_clause(req, llm)
     except LLMError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e

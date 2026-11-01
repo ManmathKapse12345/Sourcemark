@@ -10,6 +10,7 @@ import { errorHandler, notFound } from "./http/errors.js";
 import { logger } from "./logger.js";
 import { brandKitRouter } from "./routes/brandKit.js";
 import { contentRouter } from "./routes/content.js";
+import { healthRouter } from "./routes/health.js";
 import { accountRouter, membersRouter } from "./routes/orgs.js";
 
 export interface AppDeps {
@@ -43,6 +44,7 @@ export function createApp(deps: AppDeps) {
   org.use(membersRouter());
   org.use(brandKitRouter(deps.analysis, deps.maxUploadMb));
   org.use(contentRouter(deps.analysis, deps.maxUploadMb));
+  org.use(healthRouter(deps.analysis));
   api.use("/orgs/:orgId", org);
 
   app.use("/api", api);
