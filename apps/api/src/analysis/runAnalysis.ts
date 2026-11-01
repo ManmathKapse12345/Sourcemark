@@ -1,10 +1,10 @@
 import type { AnalysisRun, Prisma } from "@prisma/client";
-import { Channel, type AnalyzeResponse } from "@sourcemark/contract";
+import { Channel, type AnalyzeResponse, type ImageAnalyzeResponse } from "@sourcemark/contract";
 import { audit } from "../audit.js";
 import { prisma } from "../db.js";
 import { HttpError } from "../http/errors.js";
 import { logger } from "../logger.js";
-import { loadBrandKit } from "./brandKit.js";
+import { loadBrandKit, loadImageAssets } from "./brandKit.js";
 import type { AnalysisClient } from "./client.js";
 
 interface RunInput {
@@ -29,14 +29,26 @@ export async function runAnalysis(client: AnalysisClient, input: RunInput): Prom
 
   const run = await prisma.analysisRun.create({ data: { orgId, contentItemId, versionId } });
 
-  let result: AnalyzeResponse;
+  // Image posts also return the text read from the image (findings' spans point into it) and notes.
+  let result: AnalyzeResponse & Partial<Pick<ImageAnalyzeResponse, "ocr_text" | "image" | "notes">>;
   try {
-    result = await client.analyze({
-      org_id: orgId,
-      content: { text: version.body, channel: Channel.parse(item.channel) },
-      brand_kit: await loadBrandKit(prisma, orgId),
-      options: { ai: item.aiChecks, as_of: new Date().toISOString().slice(0, 10) },
-    });
+    const brandKit = await loadBrandKit(prisma, orgId);
+    const options = { ai: item.aiChecks, as_of: new Date().toISOString().slice(0, 10) };
+    if (item.kind === "image") {
+      if (!version.imageData || !version.imageMime) throw new HttpError(409, "conflict", "This image post has no image");
+      result = await client.analyzeImage(
+        { org_id: orgId, channel: Channel.parse(item.channel), alt_text: version.altText, brand_kit: brandKit,
+          assets: await loadImageAssets(prisma, orgId), options },
+        { buffer: Buffer.from(version.imageData), mimetype: version.imageMime, originalname: version.sourceFileName ?? "image" },
+      );
+    } else {
+      result = await client.analyze({
+        org_id: orgId,
+        content: { text: version.body, channel: Channel.parse(item.channel) },
+        brand_kit: brandKit,
+        options,
+      });
+    }
   } catch (err) {
     const message = err instanceof HttpError ? err.message : "Analysis failed";
     logger.warn({ err, runId: run.id }, "analysis failed");
@@ -90,6 +102,10 @@ export async function runAnalysis(client: AnalysisClient, input: RunInput): Prom
           fixStart: f.fix?.start ?? null,
           fixEnd: f.fix?.end ?? null,
           fixReplacement: f.fix?.replacement ?? null,
+          boxX: f.box?.x ?? null,
+          boxY: f.box?.y ?? null,
+          boxW: f.box?.w ?? null,
+          boxH: f.box?.h ?? null,
           status: priorDispute ? "DISPUTED" : "OPEN",
           carriedFromId: prior?.id ?? null,
         },
@@ -150,10 +166,15 @@ export async function runAnalysis(client: AnalysisClient, input: RunInput): Prom
       },
     });
 
+    if (result.image) {
+      await tx.contentVersion.update({ where: { id: versionId }, data: { imageWidth: result.image.width, imageHeight: result.image.height } });
+    }
     return tx.analysisRun.update({
       where: { id: run.id },
       data: {
         status: "COMPLETED",
+        ocrText: result.ocr_text ?? null,
+        notes: result.notes ?? [],
         aiStatus: result.ai_status,
         aiError: result.ai_error,
         model: result.model,

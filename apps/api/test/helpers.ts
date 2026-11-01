@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AnalyzeRequest, AnalyzeResponse, FindingDTO } from "@sourcemark/contract";
+import type { AnalyzeRequest, AnalyzeResponse, FindingDTO, ImageAnalyzeRequest, ImageAnalyzeResponse, RewordClauseRequest } from "@sourcemark/contract";
 import { SignJWT } from "jose";
 import request from "supertest";
 import type { AnalysisClient } from "../src/analysis/client.js";
@@ -36,15 +36,37 @@ export class FakeAnalysis implements AnalysisClient {
       findings.push({
         fingerprint: fp, kind: "violation", category: "terminology", severity: "high", origins: ["rule"],
         span: { start, end: start + word.length }, quote: word, explanation: `${word} is not allowed.`,
-        source: { type: "rule", code: fp === "fp-cream" ? "R-4" : "R-1", clause_code: "G-1", text: "Clause text" },
-        confidence: 1, fix: fix === null ? null : { start, end: start + word.length, replacement: fix },
+        source: { type: "rule", code: fp === "fp-cream" ? "R-4" : "R-1", clause_code: "G-1.1", text: "Use the approved product name." },
+        confidence: 1, fix: fix === null ? null : { start, end: start + word.length, replacement: fix }, box: null,
       });
     };
     add("Cream", "fp-cream", "Moisturiser");
     add("miracle", "fp-miracle", null);
     return {
       findings, rewrites: [], ai_status: "disabled", ai_error: null, model: null,
-      stats: { rule_findings: findings.length, ai_findings: 0, ai_downgraded: 0, ai_dropped_unanchored: 0, merged: 0, duration_ms: 1 },
+      stats: { rule_findings: findings.length, ai_findings: 0, ai_downgraded: 0, ai_dropped_unanchored: 0, merged: 0, language: "en", duration_ms: 1 },
+    };
+  }
+  // Image posts: an off-palette colour (with a box) and, until alt text is set, the missing-alt-text check.
+  imageCalls: { req: ImageAnalyzeRequest; bytes: number }[] = [];
+  async analyzeImage(req: ImageAnalyzeRequest, image: { buffer: Buffer }): Promise<ImageAnalyzeResponse> {
+    this.imageCalls.push({ req, bytes: image.buffer.length });
+    const findings: FindingDTO[] = [{
+      fingerprint: "fp-colour", kind: "violation", category: "visual", severity: "medium", origins: ["rule"], span: null,
+      quote: "#E0317A", explanation: "#E0317A is not a brand colour.", confidence: 1, fix: null,
+      source: { type: "asset", code: "A-1", clause_code: null, text: "Palette: #1F4D3A" }, box: { x: 0, y: 0.5, w: 1, h: 0.2 },
+    }];
+    if (!req.alt_text) {
+      findings.push({
+        fingerprint: "fp-alt", kind: "violation", category: "accessibility", severity: "medium", origins: ["rule"], span: null,
+        quote: "", explanation: "No alt text.", confidence: 1, fix: null, box: null,
+        source: { type: "standard", code: "WCAG-1.1.1", clause_code: null, text: "Images need a text alternative." },
+      });
+    }
+    return {
+      findings, rewrites: [], ai_status: "disabled", ai_error: null, model: null, ocr_text: "Now just ₹499",
+      image: { width: 1080, height: 1080 }, notes: ["AI checks are off, so the text in the image was not checked."],
+      stats: { rule_findings: findings.length, ai_findings: 0, ai_downgraded: 0, ai_dropped_unanchored: 0, merged: 0, language: "en", duration_ms: 1 },
     };
   }
   async parse() {
@@ -58,6 +80,11 @@ export class FakeAnalysis implements AnalysisClient {
   }
   async suggestRules() {
     return { suggestions: [] };
+  }
+  rewordCalls: RewordClauseRequest[] = [];
+  async rewordClause(req: RewordClauseRequest) {
+    this.rewordCalls.push(req);
+    return { text: `${req.clause.text} Factual descriptions are allowed.`, rationale: "People disputed factual wording.", case_ids: [req.cases[0]!.id] };
   }
 }
 

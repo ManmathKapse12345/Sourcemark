@@ -7,10 +7,11 @@ from collections.abc import Callable
 
 from .contract import ClauseDTO, Fix, RuleDTO
 from .findings import Finding, rule_source
+from .indic import WORD_CHARS
 from .text import find_term, overlaps, sentence_at, term_pattern, word_count
 
 Spans = list[tuple[int, int]]
-Check = Callable[[str, Spans, RuleDTO, str, dict[str, ClauseDTO]], list[Finding]]
+Check = Callable[[str, Spans, RuleDTO, str, dict[str, ClauseDTO], bool], list[Finding]]
 
 
 def _finding(rule: RuleDTO, clauses: dict[str, ClauseDTO], category: str, start: int | None, end: int | None,
@@ -29,14 +30,15 @@ def _finding(rule: RuleDTO, clauses: dict[str, ClauseDTO], category: str, start:
     )
 
 
-def banned_term(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def banned_term(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+                any_script: bool = False) -> list[Finding]:
     terms: list[str] = rule.config.get("terms", [])
     replacement = rule.config.get("replacement")
     category = rule.config.get("category", "claim")
     hits: list[tuple[int, int]] = []
     # Longest terms first, so "skin lightening" wins over "lightening" on the same words.
     for term in sorted(terms, key=len, reverse=True):
-        for span in find_term(text, term):
+        for span in find_term(text, term, any_script=any_script):
             if not any(overlaps(span, h) for h in hits):
                 hits.append(span)
     out = []
@@ -46,14 +48,15 @@ def banned_term(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: d
     return out
 
 
-def terminology(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def terminology(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+                any_script: bool = False) -> list[Finding]:
     preferred: str = rule.config["preferred"]
     variants: list[str] = rule.config.get("variants", [])
-    correct = find_term(text, preferred)  # case-insensitive
+    correct = find_term(text, preferred, any_script=any_script)  # case-insensitive
     out: list[Finding] = []
     taken: list[tuple[int, int]] = []
     for variant in sorted(variants, key=len, reverse=True):
-        for span in find_term(text, variant):
+        for span in find_term(text, variant, any_script=any_script):
             if any(overlaps(span, c) for c in correct) or any(overlaps(span, t) for t in taken):
                 continue
             taken.append(span)
@@ -62,9 +65,10 @@ def terminology(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: d
                                 f'Use "{preferred}" instead of "{text[s:e]}".',
                                 Fix(start=s, end=e, replacement=preferred)))
     # Exact casing matters only for names that contain capitals ("Northfern", not "sign up").
+    # A Devanagari spelling has no capitals to get wrong.
     if any(ch.isupper() for ch in preferred):
         for s, e in correct:
-            if text[s:e] != preferred:
+            if text[s:e] != preferred and text[s:e].isascii():
                 out.append(_finding(rule, clauses, "terminology", s, e, text,
                                     f'Write "{preferred}" exactly, not "{text[s:e]}".',
                                     Fix(start=s, end=e, replacement=preferred)))
@@ -74,7 +78,8 @@ def terminology(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: d
 _WORD = re.compile(r"(?<![\w#@/.])[^\W\d_]+(?:['’][^\W\d_]+)?(?![\w/])")
 
 
-def all_caps(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def all_caps(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+             any_script: bool = False) -> list[Finding]:
     min_len = int(rule.config.get("min_length", 3))
     allow = {a.upper() for a in rule.config.get("allow", [])}
     words = [
@@ -100,7 +105,8 @@ def all_caps(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict
     return out
 
 
-def punctuation(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def punctuation(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+                any_script: bool = False) -> list[Finding]:
     allowed = int(rule.config.get("max_exclamations", 1))
     out = []
     for i, m in enumerate(re.finditer(r"!+", text)):
@@ -115,7 +121,8 @@ def punctuation(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: d
     return out
 
 
-def long_sentence(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def long_sentence(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+                  any_script: bool = False) -> list[Finding]:
     limit = int(rule.config.get("max_words", 30))
     out = []
     for s, e in sents:
@@ -126,7 +133,8 @@ def long_sentence(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses:
     return out
 
 
-def required_disclosure(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def required_disclosure(text: str, sents: Spans, rule: RuleDTO, channel: str, clauses: dict[str, ClauseDTO],
+                        any_script: bool = False) -> list[Finding]:
     if channel not in rule.config.get("channels", []):
         return []
     tags: list[str] = rule.config.get("any_of", [])
@@ -154,15 +162,18 @@ CHECKS: dict[str, Check] = {
 }
 
 
-def run_rules(text: str, sents: Spans, rules: list[RuleDTO], channel: str, clauses: dict[str, ClauseDTO]) -> list[Finding]:
+def run_rules(text: str, sents: Spans, rules: list[RuleDTO], channel: str, clauses: dict[str, ClauseDTO],
+              any_script: bool = False) -> list[Finding]:
     out: list[Finding] = []
     for rule in rules:
-        out.extend(CHECKS[rule.type](text, sents, rule, channel, clauses))
+        out.extend(CHECKS[rule.type](text, sents, rule, channel, clauses, any_script))
     return out
 
 
-# One to four words written twice in a row: "a a", "Tired of Tired of".
-_REPEAT = re.compile(r"(?<!\w)(\w+(?:[ \t]+\w+){0,3})[ \t]+\1(?!\w)", re.IGNORECASE)
+# One to four words written twice in a row: "a a", "Tired of Tired of". Hindi vowel signs count as
+# part of a word, so the end of "क्रीम" and the start of "मीठी" are not a repeated "म".
+_W = f"[{WORD_CHARS}]"
+_REPEAT = re.compile(rf"(?<!{_W})({_W}+(?:[ \t]+{_W}+){{0,3}})[ \t]+\1(?!{_W})", re.IGNORECASE)
 
 
 def repeated_words(text: str) -> list[Finding]:

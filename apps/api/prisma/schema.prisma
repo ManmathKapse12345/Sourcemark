@@ -217,13 +217,17 @@ model Fact {
 model Asset {
   id        String   @id @default(cuid())
   orgId     String
+  code      String? // citable code A-n, cited by image findings
   name      String
   type      String
   url       String?
   colors    String[]
   notes     String?
+  imageData Bytes? // approved logo file (PNG/JPEG/WebP), used to check logo use in images
+  imageMime String?
   createdAt DateTime @default(now())
 
+  @@unique([orgId, code])
   @@index([orgId])
 }
 
@@ -233,6 +237,7 @@ model ContentItem {
   title     String
   channel   String
   state     ContentState @default(DRAFT)
+  kind      String       @default("text") // "text" or "image"
   aiChecks  Boolean      @default(true) // false: rule checks only, nothing is sent to the LLM
   authorId  String // Member id
   createdAt DateTime     @default(now())
@@ -252,8 +257,13 @@ model ContentVersion {
   orgId          String
   contentItemId  String
   number         Int
-  body           String
+  body           String // image posts: the alt text (the text read from the image is on the run)
   sourceFileName String?
+  imageData      Bytes? // image posts: the creative
+  imageMime      String?
+  imageWidth     Int?
+  imageHeight    Int?
+  altText        String?
   createdById    String
   createdAt      DateTime @default(now())
 
@@ -275,6 +285,8 @@ model AnalysisRun {
   stats         Json?
   error         String?
   durationMs    Int?
+  ocrText       String? // image posts: text read from the image; text findings' spans point into it
+  notes         String[]  @default([]) // checks that could not run and why
   createdAt     DateTime  @default(now())
   completedAt   DateTime?
 
@@ -309,6 +321,10 @@ model Finding {
   fixStart          Int?
   fixEnd            Int?
   fixReplacement    String?
+  boxX              Float? // image findings: region as fractions of width and height
+  boxY              Float?
+  boxW              Float?
+  boxH              Float?
   status            FindingStatus @default(OPEN)
   closedInVersionId String?
   carriedFromId     String?

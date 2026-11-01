@@ -17,10 +17,10 @@ import { audit } from "../audit.js";
 import { carryOverCodes, nextFreeCode } from "../content/clauseCodes.js";
 import { member, requireRole } from "../auth/middleware.js";
 import { prisma, type Db } from "../db.js";
-import { factCode, guidelinePrefix, ruleCode } from "../db/codes.js";
+import { assetCode, factCode, guidelinePrefix, ruleCode } from "../db/codes.js";
 import { owned } from "../db/scoped.js";
-import { badRequest, conflict } from "../http/errors.js";
-import { assertFileContent, uploader } from "../http/upload.js";
+import { badRequest, conflict, notFound } from "../http/errors.js";
+import { assertFileContent, isImage, uploader } from "../http/upload.js";
 import { param, parseBody, parseForm } from "../http/validate.js";
 
 const DAY_MS = 86_400_000;
@@ -51,6 +51,7 @@ async function assertClauseExists(db: Db, orgId: string, code: string | null | u
 export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
   const r = Router({ mergeParams: true });
   const upload = uploader(maxUploadMb);
+  const imageUpload = uploader(maxUploadMb, "images");
   const admin = requireRole("ADMIN");
 
   // ---------- Guidelines and clauses ----------
@@ -424,24 +425,45 @@ export function brandKitRouter(analysis: AnalysisClient, maxUploadMb: number) {
     res.json(updated);
   });
 
-  // ---------- Assets (metadata; image checks arrive in Round 3) ----------
+  // ---------- Assets: the palette and logo files that image review checks against ----------
 
   r.get("/assets", async (req, res) => {
     const { orgId } = member(req);
-    res.json({ assets: await prisma.asset.findMany({ where: { orgId }, orderBy: { createdAt: "asc" } }) });
+    const assets = await prisma.asset.findMany({ where: { orgId }, orderBy: { createdAt: "asc" }, omit: { imageData: true } });
+    res.json({ assets: assets.map((a) => ({ ...a, hasImage: a.imageMime !== null })) });
   });
 
-  r.post("/assets", admin, async (req, res) => {
+  r.get("/assets/:assetId/image", async (req, res) => {
+    const { orgId } = member(req);
+    const asset = owned(await prisma.asset.findUnique({ where: { id: param(req.params.assetId, "assetId") } }), orgId, "Asset");
+    if (!asset.imageData || !asset.imageMime) throw notFound("Asset image");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.type(asset.imageMime).send(Buffer.from(asset.imageData));
+  });
+
+  // JSON, or multipart with the approved logo file as "file" (and colors as a comma-separated list).
+  r.post("/assets", admin, imageUpload.single("file"), async (req, res) => {
     const me = member(req);
-    const body = parseBody(CreateAssetBody, req.body);
+    const fields = { ...req.body };
+    if (typeof fields.colors === "string") fields.colors = fields.colors.split(",").map((c: string) => c.trim()).filter(Boolean);
+    const body = req.file ? parseForm(CreateAssetBody, fields) : parseBody(CreateAssetBody, req.body);
+    if (req.file) {
+      assertFileContent(req.file);
+      if (!isImage(req.file)) throw badRequest("Upload a PNG, JPEG or WebP image");
+    }
     const asset = await prisma.$transaction(async (tx) => {
       const a = await tx.asset.create({
-        data: { orgId: me.orgId, name: body.name, type: body.type, url: body.url ?? null, colors: body.colors, notes: body.notes ?? null },
+        data: {
+          orgId: me.orgId, code: await assetCode(tx, me.orgId), name: body.name, type: body.type, url: body.url ?? null,
+          colors: body.colors, notes: body.notes ?? null,
+          imageData: req.file ? new Uint8Array(req.file.buffer) : null, imageMime: req.file?.mimetype ?? null,
+        },
+        omit: { imageData: true },
       });
-      await audit(tx, { orgId: me.orgId, actorId: me.id, action: "asset.created", entityType: "Asset", entityId: a.id });
+      await audit(tx, { orgId: me.orgId, actorId: me.id, action: "asset.created", entityType: "Asset", entityId: a.id, data: { code: a.code } });
       return a;
     });
-    res.status(201).json(asset);
+    res.status(201).json({ ...asset, hasImage: asset.imageMime !== null });
   });
 
   r.delete("/assets/:assetId", admin, async (req, res) => {

@@ -1,4 +1,4 @@
-import type { ContentState, Prisma } from "@prisma/client";
+import type { ContentState, ContentVersion, Prisma } from "@prisma/client";
 import {
   CommentBody,
   ContentState as ContentStateEnum,
@@ -8,6 +8,7 @@ import {
   TransitionBody,
 } from "@sourcemark/contract";
 import { Router, type Request } from "express";
+import { z } from "zod";
 import type { AnalysisClient } from "../analysis/client.js";
 import { runAnalysis } from "../analysis/runAnalysis.js";
 import { audit } from "../audit.js";
@@ -15,8 +16,8 @@ import { member, requireRole } from "../auth/middleware.js";
 import { prisma } from "../db.js";
 import { owned } from "../db/scoped.js";
 import { applyEdits, type Edit } from "../content/applyEdits.js";
-import { badRequest, conflict, forbidden } from "../http/errors.js";
-import { assertFileContent, uploader } from "../http/upload.js";
+import { badRequest, conflict, forbidden, notFound } from "../http/errors.js";
+import { assertFileContent, isImage, uploader } from "../http/upload.js";
 import { param, parseBody, parseForm } from "../http/validate.js";
 import { availableActions, EDITABLE_STATES, planTransition } from "../workflow/stateMachine.js";
 
@@ -45,9 +46,46 @@ function blockingFindings(run: Awaited<ReturnType<typeof latestRun>>) {
   return run?.findings.filter((f) => f.kind === "violation" && f.status === "OPEN") ?? [];
 }
 
+const AltText = z.string().trim().max(1000).optional();
+
+// A new version of an image post: a new image (multipart "file"), new alt text, or both. Text edits and
+// suggested fixes do not apply: the writer changes the image itself.
+async function newImageVersion(req: Request, contentItemId: string, latest: ContentVersion) {
+  const me = member(req);
+  const altText = AltText.parse(typeof req.body?.altText === "string" ? req.body.altText : undefined);
+  if (!req.file && altText === undefined) {
+    throw conflict("Change an image post by uploading a new image or editing its alt text");
+  }
+  if (req.file) {
+    assertFileContent(req.file);
+    if (!isImage(req.file)) throw badRequest("Upload a PNG, JPEG or WebP image");
+  }
+  const image = req.file ?? null;
+  if (!image && altText === (latest.altText ?? "")) throw conflict("The new version is identical to the current one");
+  return prisma.$transaction(async (tx) => {
+    const v = await tx.contentVersion.create({
+      data: {
+        orgId: me.orgId, contentItemId, number: latest.number + 1, createdById: me.id,
+        body: altText ?? latest.altText ?? "",
+        altText: altText ?? latest.altText,
+        imageData: image ? new Uint8Array(image.buffer) : latest.imageData,
+        imageMime: image ? image.mimetype : latest.imageMime,
+        sourceFileName: image ? image.originalname : latest.sourceFileName,
+      },
+      omit: { imageData: true },
+    });
+    await tx.contentItem.update({ where: { id: contentItemId }, data: { updatedAt: new Date() } });
+    await audit(tx, {
+      orgId: me.orgId, actorId: me.id, action: "content.version_created", entityType: "ContentItem", entityId: contentItemId,
+      data: { versionId: v.id, number: v.number, newImage: !!image, altTextChanged: altText !== undefined },
+    });
+    return v;
+  });
+}
+
 export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
   const r = Router({ mergeParams: true });
-  const upload = uploader(maxUploadMb);
+  const upload = uploader(maxUploadMb, "documents-or-images");
 
   r.get("/content", async (req, res) => {
     const me = member(req);
@@ -65,20 +103,27 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
     const body = parseForm(CreateContentBody, req.body);
     let text = body.body;
     let sourceFileName: string | null = null;
+    // An image post: the image is reviewed as it is (colours, logos, contrast, alt text, its text).
+    const image = req.file && isImage(req.file) ? req.file : null;
     if (req.file) {
       assertFileContent(req.file);
-      const parsed = await analysis.parse(req.file);
-      text = parsed.text;
       sourceFileName = req.file.originalname;
+      if (!image) text = (await analysis.parse(req.file)).text;
     }
-    if (!text?.trim()) throw badRequest("Provide body text or upload a file with text in it");
+    if (!image && !text?.trim()) throw badRequest("Provide body text or upload a file with text in it");
 
     const created = await prisma.$transaction(async (tx) => {
       const item = await tx.contentItem.create({
-        data: { orgId: me.orgId, title: body.title, channel: body.channel, aiChecks: body.aiChecks, authorId: me.id },
+        data: { orgId: me.orgId, title: body.title, channel: body.channel, aiChecks: body.aiChecks, authorId: me.id,
+                kind: image ? "image" : "text" },
       });
       const version = await tx.contentVersion.create({
-        data: { orgId: me.orgId, contentItemId: item.id, number: 1, body: text!, sourceFileName, createdById: me.id },
+        data: {
+          orgId: me.orgId, contentItemId: item.id, number: 1, sourceFileName, createdById: me.id,
+          body: image ? (body.altText ?? "") : text!,
+          ...(image ? { imageData: new Uint8Array(image.buffer), imageMime: image.mimetype, altText: body.altText ?? null } : {}),
+        },
+        omit: { imageData: true },
       });
       await audit(tx, {
         orgId: me.orgId,
@@ -86,7 +131,7 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
         action: "content.created",
         entityType: "ContentItem",
         entityId: item.id,
-        data: { versionId: version.id, channel: body.channel, aiChecks: body.aiChecks },
+        data: { versionId: version.id, channel: body.channel, aiChecks: body.aiChecks, kind: item.kind },
       });
       return { item, version };
     });
@@ -97,7 +142,7 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
     const me = member(req);
     const item = await loadItem(req, req.params.contentId);
     const [versions, run, comments, events, author] = await Promise.all([
-      prisma.contentVersion.findMany({ where: { contentItemId: item.id }, orderBy: { number: "desc" } }),
+      prisma.contentVersion.findMany({ where: { contentItemId: item.id }, orderBy: { number: "desc" }, omit: { imageData: true } }),
       latestRun(item.id),
       prisma.comment.findMany({ where: { contentItemId: item.id }, orderBy: { createdAt: "asc" } }),
       prisma.approvalEvent.findMany({ where: { contentItemId: item.id }, orderBy: { createdAt: "asc" } }),
@@ -107,7 +152,8 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
     res.json({
       item,
       author: author ? { memberId: author.id, email: author.user.email, name: author.user.name } : null,
-      versions,
+      // Image bytes are never inlined: GET /content/:id/versions/:versionId/image serves them.
+      versions: versions.map((v) => ({ ...v, hasImage: v.imageMime !== null })),
       latestRun: run,
       blockingFindingIds: blockingFindings(run).map((f) => f.id),
       closedFindingCount: closedCount,
@@ -117,14 +163,32 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
     });
   });
 
-  r.post("/content/:contentId/versions", async (req, res) => {
+  r.get("/content/:contentId/versions/:versionId/image", async (req, res) => {
+    const item = await loadItem(req, req.params.contentId);
+    const version = await prisma.contentVersion.findUnique({ where: { id: param(req.params.versionId, "versionId") } });
+    if (!version || version.contentItemId !== item.id || !version.imageData || !version.imageMime) throw notFound("Image");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.type(version.imageMime).send(Buffer.from(version.imageData));
+  });
+
+  r.post("/content/:contentId/versions", upload.single("file"), async (req, res) => {
     const me = member(req);
     const item = await loadItem(req, req.params.contentId);
     if (item.authorId !== me.id) throw forbidden("Only the author can add versions");
     if (!EDITABLE_STATES.includes(item.state)) throw conflict(`Content that is ${item.state} cannot be edited`);
+    const latest = await prisma.contentVersion.findFirstOrThrow({ where: { contentItemId: item.id }, orderBy: { number: "desc" } });
+
+    if (item.kind === "image") {
+      const version = await newImageVersion(req, item.id, latest);
+      const run = item.state === "CHECKING"
+        ? await runAnalysis(analysis, { orgId: me.orgId, contentItemId: item.id, versionId: version.id, actorId: me.id })
+        : null;
+      res.status(201).json({ version, run });
+      return;
+    }
+    if (req.file) throw badRequest("A text post is changed by editing its text, not by uploading a file");
     const body = parseBody(CreateVersionBody, req.body);
 
-    const latest = await prisma.contentVersion.findFirstOrThrow({ where: { contentItemId: item.id }, orderBy: { number: "desc" } });
     let newBody: string;
     if (body.body !== undefined) {
       newBody = body.body;

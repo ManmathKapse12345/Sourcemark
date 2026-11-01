@@ -14,15 +14,22 @@ from difflib import SequenceMatcher
 
 from .contract import FactDTO, FindingSource, Fix, RuleDTO
 from .findings import Finding
+from .indic import DIGITS
 from .text import find_term, normalize, overlaps
 
-MONEY = re.compile(r"(?:₹|\bRs\.?|\bINR)\s?(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d{1,2}))?", re.IGNORECASE)
+# Indian amounts: ₹549, Rs. 549, INR 549, रु 549, 1,49,999 (lakh grouping), ₹1.5 lakh, 2 crore, 549 रुपये.
+_AMOUNT = r"(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d{1,2}))?"
+_SCALE = r"(?:\s?(lakhs?|lacs?|crores?|cr|लाख|करोड़|करोड)(?![\wऀ-ॿ]))?"
+MONEY = re.compile(rf"(?:₹|\bRs\.?|\bINR|रु\.?|रू\.?)\s?{_AMOUNT}{_SCALE}", re.IGNORECASE)
+MONEY_AFTER = re.compile(rf"(?<![\d.,]){_AMOUNT}{_SCALE}\s?(?:rupees|rupaye|rupaiye|rupay|रुपये|रुपए|रुपया)", re.IGNORECASE)
+SCALE = {"lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5, "लाख": 1e5,
+         "crore": 1e7, "crores": 1e7, "cr": 1e7, "करोड़": 1e7, "करोड": 1e7}
 UNITS = {
-    "g": ["g", "gm", "gms", "gram", "grams"],
-    "kg": ["kg", "kgs", "kilogram", "kilograms"],
-    "ml": ["ml", "millilitre", "millilitres", "milliliter", "milliliters"],
-    "l": ["l", "litre", "litres", "liter", "liters"],
-    "%": ["%", "percent", "per cent"],
+    "g": ["g", "gm", "gms", "gram", "grams", "ग्राम", "ग्रा"],
+    "kg": ["kg", "kgs", "kilogram", "kilograms", "किलो", "किलोग्राम"],
+    "ml": ["ml", "millilitre", "millilitres", "milliliter", "milliliters", "मिली", "मि.ली.", "एमएल", "मिलीलीटर"],
+    "l": ["l", "litre", "litres", "liter", "liters", "लीटर"],
+    "%": ["%", "percent", "per cent", "प्रतिशत"],
 }
 MONTHS = {m: i + 1 for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
@@ -33,6 +40,10 @@ DATE_DMY = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{_MONTH}\.?,?
 DATE_MDY = re.compile(rf"\b{_MONTH}\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?(?:\s+(\d{{4}}))?\b", re.IGNORECASE)
 DATE_NUM = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b")
 NOT_A_PRICE = re.compile(r"\b(above|over|under|below|up to|upto|save|saving|worth|spend|off|minimum|min\.?)\s*$", re.IGNORECASE)
+# Hindi puts these after the amount: "₹999 से ऊपर के ऑर्डर पर", "₹100 की बचत", "999 tak".
+NOT_A_PRICE_AFTER = re.compile(
+    r"^\s*(से\s+(ऊपर|ज़्यादा|ज्यादा|अधिक|कम)|तक|की\s+बचत|se\s+(upar|zyada|jyada|kam)|tak|ki\s+bachat|off)(?![\wऀ-ॿ])",
+    re.IGNORECASE)
 HONORIFICS = re.compile(r"^(dr|mr|mrs|ms|prof)\.?\s+", re.IGNORECASE)
 
 
@@ -45,6 +56,13 @@ class Mention:
 
 def _to_number(s: str) -> float:
     return float(s.replace(",", ""))
+
+
+def _amount(m: re.Match[str]) -> float:
+    """Rupees in an amount match, with paise and a lakh or crore multiplier."""
+    value = _to_number(m.group(1)) + (float(f"0.{m.group(2)}") if m.group(2) else 0.0)
+    scale = m.group(3)
+    return value * SCALE.get(scale.lower(), 1) if scale else value
 
 
 def _fmt_money(value: str) -> str:
@@ -86,11 +104,11 @@ def subject_names(facts: list[FactDTO], rules: list[RuleDTO]) -> dict[str, list[
     return {k: sorted(v, key=len, reverse=True) for k, v in names.items()}
 
 
-def find_mentions(text: str, names: dict[str, list[str]]) -> list[Mention]:
+def find_mentions(text: str, names: dict[str, list[str]], any_script: bool = False) -> list[Mention]:
     found: list[Mention] = []
     for key, variants in names.items():
         for v in variants:
-            for s, e in find_term(text, v):
+            for s, e in find_term(text, v, any_script=any_script):
                 if not any(overlaps((s, e), (m.start, m.end)) for m in found):
                     found.append(Mention(s, e, key))
     return sorted(found, key=lambda m: m.start)
@@ -114,8 +132,8 @@ def _pick_fact(candidates: list[FactDTO], sentence_text: str) -> FactDTO | None:
 
 
 def _value_mismatch(text: str, kind: str, s: int, e: int, shown: str, current: FactDTO, history: list[FactDTO],
-                    fix: str) -> Finding:
-    old = next((h for h in history if h.kind == kind and _same_value(h, shown)), None)
+                    fix: str, amount: float | None = None) -> Finding:
+    old = next((h for h in history if h.kind == kind and _same_value(h, shown, amount)), None)
     note = f" {shown} was the approved value until {old.valid_until}." if old and old.valid_until else ""
     return Finding(
         kind="violation",
@@ -131,16 +149,17 @@ def _value_mismatch(text: str, kind: str, s: int, e: int, shown: str, current: F
     )
 
 
-def _same_value(f: FactDTO, shown: str) -> bool:
+def _same_value(f: FactDTO, shown: str, amount: float | None = None) -> bool:
     try:
-        return _to_number(re.sub(r"[^\d.,]", "", shown)) == _to_number(f.value)
+        value = amount if amount is not None else _to_number(re.sub(r"[^\d.,]", "", shown.translate(DIGITS)))
+        return value == _to_number(f.value)
     except ValueError:
         return False
 
 
 def check_numbers(text: str, sents: list[tuple[int, int]], facts: list[FactDTO], rules: list[RuleDTO],
-                  as_of: date) -> list[Finding]:
-    mentions = find_mentions(text, subject_names(facts, rules))
+                  as_of: date, any_script: bool = False) -> list[Finding]:
+    mentions = find_mentions(text, subject_names(facts, rules), any_script)
     by_subject: dict[str, list[FactDTO]] = {}
     for f in facts:
         by_subject.setdefault(normalize(f.subject), []).append(f)
@@ -151,19 +170,24 @@ def check_numbers(text: str, sents: list[tuple[int, int]], facts: list[FactDTO],
         return [f for f in all_kind if is_current(f, as_of)], [f for f in all_kind if not is_current(f, as_of)]
 
     for sentence in sents:
-        stext = text[sentence[0]:sentence[1]]
-        for m in MONEY.finditer(stext):
+        # Devanagari digits become ASCII one for one, so offsets into stext stay valid.
+        stext = text[sentence[0]:sentence[1]].translate(DIGITS)
+        amounts = list(MONEY.finditer(stext))
+        amounts += [m for m in MONEY_AFTER.finditer(stext) if not any(overlaps(m.span(), a.span()) for a in amounts)]
+        for m in amounts:
             s, e = sentence[0] + m.start(), sentence[0] + m.end()
-            if NOT_A_PRICE.search(stext[:m.start()]):
+            if NOT_A_PRICE.search(stext[:m.start()]) or NOT_A_PRICE_AFTER.search(stext[m.end():]):
                 continue  # "orders above ₹999", "save ₹100": an amount, not this product's price
             subject = _nearest_subject(s, sentence, mentions)
             if not subject:
                 continue
             current, history = candidates(subject, "money")
             fact = _pick_fact(current, stext)
-            if fact and _to_number(m.group(1)) != _to_number(fact.value):
+            amount = _amount(m)
+            if fact and amount != _to_number(fact.value):
                 out.append(_value_mismatch(text, "money", s, e, text[s:e], fact,
-                                           [h for h in history if h.attribute == fact.attribute], _fmt_money(fact.value)))
+                                           [h for h in history if h.attribute == fact.attribute], _fmt_money(fact.value),
+                                           amount))
 
         for unit_key, words in UNITS.items():
             pattern = re.compile(r"(\d+(?:\.\d+)?)\s?(?:" + "|".join(re.escape(w) for w in words) + r")(?![\w])", re.IGNORECASE)
@@ -238,11 +262,11 @@ def _parse_dates(stext: str) -> list[tuple[int, int, int, int, int | None]]:
 
 
 def check_dates(text: str, sents: list[tuple[int, int]], facts: list[FactDTO], rules: list[RuleDTO],
-                as_of: date) -> list[Finding]:
+                as_of: date, any_script: bool = False) -> list[Finding]:
     date_facts = [f for f in facts if f.kind == "date" and is_current(f, as_of)]
     if not date_facts:
         return []
-    mentions = find_mentions(text, subject_names(date_facts, rules))
+    mentions = find_mentions(text, subject_names(date_facts, rules), any_script)
     out: list[Finding] = []
     for sentence in sents:
         stext = text[sentence[0]:sentence[1]]
@@ -265,9 +289,9 @@ def check_dates(text: str, sents: list[tuple[int, int]], facts: list[FactDTO], r
 
 
 def check_facts(text: str, sents: list[tuple[int, int]], facts: list[FactDTO], rules: list[RuleDTO],
-                as_of: date) -> list[Finding]:
+                as_of: date, any_script: bool = False) -> list[Finding]:
     return [
-        *check_numbers(text, sents, facts, rules, as_of),
+        *check_numbers(text, sents, facts, rules, as_of, any_script),
         *check_names(text, [f for f in facts if is_current(f, as_of)]),
-        *check_dates(text, sents, facts, rules, as_of),
+        *check_dates(text, sents, facts, rules, as_of, any_script),
     ]
