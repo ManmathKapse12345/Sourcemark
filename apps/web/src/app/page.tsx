@@ -130,7 +130,7 @@ function Cards({ items }: { items: ContentSummary[] }) {
       {items.map((c) => (
         <li key={c.id}>
           <Link href={`/content/${c.id}`} className="card group block space-y-2 transition hover:-translate-y-0.5 hover:border-slate-300">
-            <div className="flex items-center gap-2"><StateBadge state={c.state} /><span className="ml-auto text-xs text-slate-500">{c.channel.replace("_", " ")}</span></div>
+            <div className="flex items-center gap-2"><StateBadge state={c.state} />{c.kind === "image" && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">Image</span>}<span className="ml-auto text-xs text-slate-500">{c.channel.replace("_", " ")}</span></div>
             <h3 className="text-base font-medium group-hover:text-brand">{c.title}</h3>
             <p className="text-xs text-slate-500">{WAITING[c.state]} · {fmtDate(c.updatedAt)}</p>
           </Link>

@@ -27,7 +27,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const nav = [
     { href: "/", label: "Dashboard" },
     { href: "/brand-kit", label: "Brand kit" },
-    ...(can("ADMIN") ? [{ href: "/team", label: "Team" }, { href: "/audit", label: "Audit log" }] : []),
+    ...(can("ADMIN") ? [{ href: "/guideline-health", label: "Guideline health" }, { href: "/team", label: "Team" }, { href: "/audit", label: "Audit log" }] : []),
   ];
   return (
     <div className="min-h-screen">
