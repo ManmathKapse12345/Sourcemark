@@ -356,6 +356,42 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
     res.status(201).json(response);
   });
 
+  r.delete("/findings/:findingId/responses/latest", async (req, res) => {
+    const me = member(req);
+    const finding = owned(await prisma.finding.findUnique({ where: { id: param(req.params.findingId, "findingId") } }), me.orgId, "Finding");
+    const item = await loadItem(req, finding.contentItemId);
+    const isAuthor = item.authorId === me.id;
+    const canRespond =
+      (isAuthor && EDITABLE_STATES.includes(item.state)) ||
+      (item.state === "IN_REVIEW" && me.roles.some((r) => r === "REVIEWER" || r === "APPROVER") && !isAuthor);
+    if (!canRespond) throw forbidden("You cannot undo a finding response on this content right now");
+    if (finding.status !== "OPEN" && finding.status !== "DISPUTED") {
+      throw conflict("This finding is from an older check; its response cannot be undone");
+    }
+    const latest = await prisma.findingResponse.findFirst({
+      where: { findingId: finding.id },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    if (!latest || latest.memberId !== me.id) throw conflict("Only your latest response can be undone");
+    const previous = await prisma.findingResponse.findFirst({
+      where: { findingId: finding.id, id: { not: latest.id } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.findingResponse.delete({ where: { id: latest.id } });
+      await tx.finding.update({ where: { id: finding.id }, data: { status: previous?.action === "DISPUTE" ? "DISPUTED" : "OPEN" } });
+      await audit(tx, {
+        orgId: me.orgId,
+        actorId: me.id,
+        action: "finding.response_undone",
+        entityType: "Finding",
+        entityId: finding.id,
+        data: { contentItemId: item.id },
+      });
+    });
+    res.status(204).end();
+  });
+
   r.post("/content/:contentId/comments", async (req, res) => {
     const me = member(req);
     const item = await loadItem(req, req.params.contentId);

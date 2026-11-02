@@ -59,8 +59,13 @@ export default function NewContentPage() {
         </p>
       ))}
       {!file && <textarea className="input h-48" placeholder="Paste the text to review (or try: Calm Barrier Moisturiser एक चमत्कार है।)" value={body} onChange={(e) => setBody(e.target.value)} required />}
-      <div className="text-sm">
-        <label>Or upload a file (PNG, JPEG, WebP, DOCX, PDF or TXT): <input type="file" accept=".png,.jpg,.jpeg,.webp,.docx,.pdf,.txt,.md" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+      <div className="space-y-2 text-sm">
+        <label htmlFor="content-file" className="block font-medium">Upload a file <span className="font-normal text-slate-500">(PNG, JPEG, WebP, DOCX, PDF or TXT)</span></label>
+        <label htmlFor="content-file" className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-brand hover:bg-brand-soft focus-within:border-brand focus-within:ring-2 focus-within:ring-brand">
+          <span className="font-semibold text-ink">{file ? "Choose a different file" : "Choose a file to upload"}</span>
+          <span className="text-xs text-slate-500">{file?.name ?? "PNG, JPEG, WebP, DOCX, PDF or TXT · optional"}</span>
+          <input id="content-file" className="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,.docx,.pdf,.txt,.md" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
       </div>
       {isImage && file && <div className="space-y-2 rounded-xl bg-slate-50 p-3">
         <p className="text-sm font-medium">Image preview</p>
