@@ -80,6 +80,22 @@ def test_ai_fix_for_another_guideline_is_not_put_on_a_rule(kit, settings):
     assert rule.fix.replacement == "results in a week"
 
 
+def test_missing_disclosure_from_rule_and_ai_is_one_finding(kit, settings):
+    text = "It's made to protect your skin every day."
+    res = analyze(make_request(kit, text, channel="creator_post"), None, None, settings)
+    found = next(f for f in res.findings if f.source.code == "R-11")
+    rule = Finding(kind="violation", category="disclosure", severity="high", origins=["rule"], start=None, end=None,
+                   quote="", explanation=found.explanation, source=found.source, fix=found.fix)
+    # The AI cites the clause and rewrites the whole sentence; applying both would give "#ad #ad ...".
+    ai = Finding(kind="violation", category="disclosure", severity="high", origins=["ai"], start=0, end=len(text),
+                 quote=text, explanation="Every paid or gifted creator post must start with #ad or #sponsored.",
+                 source=FindingSource(type="clause", code="G-5.1", clause_code=None, text="..."),
+                 fix=Fix(start=0, end=len(text), replacement=f"#ad {text}"))
+    merged, count = merge([rule], [ai])
+    assert merged == [rule] and count == 1
+    assert rule.fix.replacement == "#ad " and rule.origins == ["rule", "ai"]
+
+
 def test_numbers_are_only_compared_in_context(kit, settings):
     # A figure about something else is not checked against a product fact.
     res = analyze(make_request(kit, "Northfern has 100,000 customers. Calm Barrier Moisturiser is ₹549."), None, None, settings)

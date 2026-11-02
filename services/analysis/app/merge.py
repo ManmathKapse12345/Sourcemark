@@ -61,6 +61,10 @@ def _same_fact_same_sentence(a: Finding, b: Finding, sents: Sequence[tuple[int, 
 def _same_problem(a: Finding, b: Finding, sents: Sequence[tuple[int, int]] = ()) -> bool:
     if _same_fact_same_sentence(a, b, sents):
         return True
+    # A finding about the whole piece (no disclosure tag) has no words to overlap; the AI anchors the
+    # same problem on the first sentence. One guideline, one problem.
+    if (a.span is None or b.span is None) and a.grounding is not None and a.grounding == b.grounding:
+        return True
     if not (a.span and b.span and overlaps(a.span, b.span)):
         return False
     # The exact same words are one problem even when the AI files it under another category
