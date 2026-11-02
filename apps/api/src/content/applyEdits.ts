@@ -5,6 +5,25 @@ export interface Edit {
   end: number;
   replacement: string;
   label: string; // shown in the error when two edits overlap
+  chosenAt?: Date; // when the writer picked it; set for fixes chosen on findings
+}
+
+// A writer who picks one fix and then another for the same words has changed their mind: the
+// later choice replaces the earlier one. Edits without `chosenAt` (rewrites picked when applying)
+// are left alone, so a clash with them is still reported.
+export function latestChoiceWins(edits: Edit[]): Edit[] {
+  return edits.filter(
+    (e) =>
+      !e.chosenAt ||
+      !edits.some(
+        (o) => o !== e && o.chosenAt && o.chosenAt > e.chosenAt! && rangesClash(e, o) &&
+          !(o.start === e.start && o.end === e.end && o.replacement === e.replacement),
+      ),
+  );
+}
+
+function rangesClash(a: Edit, b: Edit): boolean {
+  return (a.start < b.end && b.start < a.end) || (a.start === a.end && b.start === b.end && a.start === b.start);
 }
 
 // Applies non-overlapping replacements to a text. Edits are applied from the end so

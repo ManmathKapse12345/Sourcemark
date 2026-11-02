@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from .contract import Fix
 from .findings import Finding
 from .text import overlaps, sentence_at
 
@@ -60,6 +61,10 @@ def _same_fact_same_sentence(a: Finding, b: Finding, sents: Sequence[tuple[int, 
 def _same_problem(a: Finding, b: Finding, sents: Sequence[tuple[int, int]] = ()) -> bool:
     if _same_fact_same_sentence(a, b, sents):
         return True
+    # A finding about the whole piece (no disclosure tag) has no words to overlap; the AI anchors the
+    # same problem on the first sentence. One guideline, one problem.
+    if (a.span is None or b.span is None) and a.grounding is not None and a.grounding == b.grounding:
+        return True
     if not (a.span and b.span and overlaps(a.span, b.span)):
         return False
     # The exact same words are one problem even when the AI files it under another category
@@ -67,6 +72,10 @@ def _same_problem(a: Finding, b: Finding, sents: Sequence[tuple[int, int]] = ())
     if a.span == b.span:
         return True
     return (a.grounding is not None and a.grounding == b.grounding) or a.category == b.category
+
+
+def _only_recases(fix: Fix, f: Finding) -> bool:
+    return (fix.start, fix.end) == f.span and fix.replacement.casefold() == f.quote.casefold()
 
 
 def merge(rule_findings: list[Finding], ai_findings: list[Finding],
@@ -83,7 +92,12 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding],
             # The AI often names more of the problem than the rule does ("in 7 days" next to "guaranteed").
             if a.kind == "violation" and a.explanation:
                 target.explanation = _add_explanation(target.explanation, a.explanation)
-            if target.fix is None and a.fix is not None:
+            # A rule without a fix flags the words themselves (a banned term): changing only their
+            # capitals ("GUARANTEED" -> "guaranteed") leaves the problem, so that fix is not taken.
+            # Nor is a fix for another guideline anchored on the same words: the AI's fix for a time
+            # promise, put on "fair skin", is no answer to the skin-tone rule.
+            if (target.fix is None and a.fix is not None and not _only_recases(a.fix, target)
+                    and a.grounding == target.grounding):
                 target.fix = a.fix
             merged += 1
             continue
@@ -92,3 +106,23 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding],
             continue
         kept_ai.append(a)
     return rule_findings + kept_ai, merged
+
+
+def drop_dead_end_fixes(findings: list[Finding], text: str) -> None:
+    """Removes a fix that only changes capitals when another problem sits on the same words.
+
+    "MIRACLE" breaks both the capitals rule and the hype-word rule. Lowering it to "miracle" leaves
+    the hype word in place, and both fixes change the same text, so the writer could apply only one.
+    The other finding's fix (or a rewrite) settles both problems.
+    """
+    for f in findings:
+        if f.fix is None:
+            continue
+        before = text[f.fix.start:f.fix.end]
+        if f.fix.replacement == before or f.fix.replacement.casefold() != before.casefold():
+            continue
+        if any(g is not f and g.kind == "violation" and g.span and f.fix.start <= g.span[0] and g.span[1] <= f.fix.end
+               and not (g.fix and g.fix.replacement.casefold() == text[g.fix.start:g.fix.end].casefold())
+               for g in findings):
+            f.fix = None
+            f.explanation = f"{f.explanation} Fixing the other problem on these words fixes this too."

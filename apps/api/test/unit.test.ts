@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEdits } from "../src/content/applyEdits.js";
+import { applyEdits, latestChoiceWins } from "../src/content/applyEdits.js";
 import { carryOverCodes, nextFreeCode } from "../src/content/clauseCodes.js";
 import { HttpError } from "../src/http/errors.js";
 import { availableActions, planTransition } from "../src/workflow/stateMachine.js";
@@ -58,6 +58,21 @@ describe("applyEdits", () => {
 
   it("refuses overlapping edits", () => {
     expect(() => applyEdits("Our Cream is great", [e(4, 9, "A"), e(0, 12, "B")])).toThrow(/same text/);
+  });
+});
+
+describe("latestChoiceWins", () => {
+  const chosen = (start: number, end: number, replacement: string, at: number) =>
+    ({ start, end, replacement, label: replacement, chosenAt: new Date(at) });
+
+  it("keeps the fix chosen last when two fixes change the same words", () => {
+    const edits = [chosen(4, 11, "wonderful", 1), chosen(4, 11, "miracle", 2), chosen(12, 14, "!", 1)];
+    expect(applyEdits("Our MIRACLE !!",latestChoiceWins(edits))).toBe("Our miracle !");
+  });
+
+  it("still reports a clash with a rewrite picked when applying", () => {
+    const edits = [chosen(4, 9, "Moisturiser", 1), { start: 0, end: 12, replacement: "B", label: "rewrite s1" }];
+    expect(() => applyEdits("Our Cream is great", latestChoiceWins(edits))).toThrow(/same text/);
   });
 });
 

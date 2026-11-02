@@ -14,7 +14,7 @@ from .findings import Finding, assign_fingerprints
 from .indic import detect_language
 from .judgement import JudgementStats, judge
 from .llm import LLM, LLMError, time_budget
-from .merge import merge
+from .merge import drop_dead_end_fixes, merge
 from .retrieval import Retriever
 from .rewrite import propose_rewrites
 from .rules import repeated_words, run_rules
@@ -65,6 +65,7 @@ def analyze_text(req: AnalyzeRequest, llm: LLM | None, retriever: Retriever | No
                 ai_status, ai_error = "unavailable", str(e)
 
     findings, merged = merge(rule_findings, ai_findings, sents)
+    drop_dead_end_fixes(findings, text)
     assign_fingerprints(findings)
     findings.sort(key=lambda f: (f.start if f.start is not None else -1, f.end or 0))
 

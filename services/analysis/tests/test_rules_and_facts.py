@@ -4,7 +4,9 @@ import json
 
 from conftest import REPO, make_request
 
-from app.contract import ExtractedClause
+from app.contract import ExtractedClause, FindingSource, Fix
+from app.findings import Finding
+from app.merge import merge
 from app.parsing import extract_clauses
 from app.pipeline import analyze
 from app.text import sentence_spans
@@ -35,6 +37,63 @@ def test_demo_caption_from_the_plan(kit, settings):
     assert "₹499 was the approved value until 2026-06-30" in price.explanation
     assert price.fix.replacement == "₹549"
     assert res.ai_status == "disabled"
+
+
+def test_no_capitals_fix_when_the_word_itself_must_go(kit, settings):
+    # "MIRACLE" -> "miracle" would leave the hype word, and clash with any fix for it.
+    res = analyze(make_request(kit, "Our Calm Barrier Cream is a MIRACLE, now just ₹549."), None, None, settings)
+    caps = next(f for f in res.findings if f.source.code == "R-8")
+    assert caps.fix is None
+    assert "fixes this too" in caps.explanation
+    # Capitals on their own still get the lower-case fix.
+    res = analyze(make_request(kit, "Our Calm Barrier Moisturiser is GENTLE on dry skin."), None, None, settings)
+    assert next(f for f in res.findings if f.source.code == "R-8").fix.replacement == "gentle"
+
+
+def test_ai_fix_that_only_lowers_a_banned_word_is_not_taken(kit, settings):
+    text = "It's GUARANTEED to work."
+    banned = next(f for f in analyze(make_request(kit, text), None, None, settings).findings if f.source.code == "R-3")
+    rule = Finding(kind="violation", category="claim", severity="high", origins=["rule"], start=banned.span.start,
+                   end=banned.span.end, quote=banned.quote, explanation=banned.explanation, source=banned.source)
+    ai = Finding(kind="violation", category="claim", severity="high", origins=["ai"], start=5, end=15,
+                 quote="GUARANTEED", explanation="Results cannot be guaranteed.", source=banned.source,
+                 fix=Fix(start=5, end=15, replacement="guaranteed"))
+    merged, _ = merge([rule], [ai])
+    assert merged == [rule] and rule.fix is None and "ai" in rule.origins
+
+
+def test_ai_fix_for_another_guideline_is_not_put_on_a_rule(kit, settings):
+    # The AI anchored a time promise (G-3.6) on "fair skin", flagged by the skin-tone rule (G-5.2).
+    text = "It gives you fair skin in a week."
+    found = next(f for f in analyze(make_request(kit, text), None, None, settings).findings if f.source.code == "R-2")
+    rule = Finding(kind="violation", category="inclusivity", severity="high", origins=["rule"], start=found.span.start,
+                   end=found.span.end, quote=found.quote, explanation=found.explanation, source=found.source)
+    ai = Finding(kind="violation", category="claim", severity="high", origins=["ai"], start=12, end=21,
+                 quote="fair skin", explanation="Do not promise results within a time.",
+                 source=FindingSource(type="clause", code="G-3.6", clause_code=None, text="..."),
+                 fix=Fix(start=12, end=21, replacement="results in a week"))
+    merge([rule], [ai])
+    assert rule.fix is None
+    # The same guideline's fix is still taken.
+    ai.source = rule.source
+    merge([rule], [ai])
+    assert rule.fix.replacement == "results in a week"
+
+
+def test_missing_disclosure_from_rule_and_ai_is_one_finding(kit, settings):
+    text = "It's made to protect your skin every day."
+    res = analyze(make_request(kit, text, channel="creator_post"), None, None, settings)
+    found = next(f for f in res.findings if f.source.code == "R-11")
+    rule = Finding(kind="violation", category="disclosure", severity="high", origins=["rule"], start=None, end=None,
+                   quote="", explanation=found.explanation, source=found.source, fix=found.fix)
+    # The AI cites the clause and rewrites the whole sentence; applying both would give "#ad #ad ...".
+    ai = Finding(kind="violation", category="disclosure", severity="high", origins=["ai"], start=0, end=len(text),
+                 quote=text, explanation="Every paid or gifted creator post must start with #ad or #sponsored.",
+                 source=FindingSource(type="clause", code="G-5.1", clause_code=None, text="..."),
+                 fix=Fix(start=0, end=len(text), replacement=f"#ad {text}"))
+    merged, count = merge([rule], [ai])
+    assert merged == [rule] and count == 1
+    assert rule.fix.replacement == "#ad " and rule.origins == ["rule", "ai"]
 
 
 def test_numbers_are_only_compared_in_context(kit, settings):
