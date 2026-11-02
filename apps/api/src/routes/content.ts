@@ -15,7 +15,7 @@ import { audit } from "../audit.js";
 import { member, requireRole } from "../auth/middleware.js";
 import { prisma } from "../db.js";
 import { owned } from "../db/scoped.js";
-import { applyEdits, type Edit } from "../content/applyEdits.js";
+import { applyEdits, latestChoiceWins, type Edit } from "../content/applyEdits.js";
 import { badRequest, conflict, forbidden, notFound } from "../http/errors.js";
 import { assertFileContent, isImage, uploader } from "../http/upload.js";
 import { param, parseBody, parseForm } from "../http/validate.js";
@@ -206,10 +206,10 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
             if (f.fixStart === null || f.fixEnd === null || f.fixReplacement === null) {
               throw conflict(`Finding ${f.id} has no suggested fix; edit it instead`);
             }
-            edits.push({ start: f.fixStart, end: f.fixEnd, replacement: f.fixReplacement, label: `the fix for "${f.quote}"` });
+            edits.push({ start: f.fixStart, end: f.fixEnd, replacement: f.fixReplacement, label: `the fix for "${f.quote}"`, chosenAt: last.createdAt });
           } else if (last?.action === "EDIT") {
             if (f.spanStart === null || f.spanEnd === null) throw conflict(`Finding ${f.id} is not tied to a span of text`);
-            edits.push({ start: f.spanStart, end: f.spanEnd, replacement: last.editedText ?? "", label: `your edit of "${f.quote}"` });
+            edits.push({ start: f.spanStart, end: f.spanEnd, replacement: last.editedText ?? "", label: `your edit of "${f.quote}"`, chosenAt: last.createdAt });
           }
         }
       }
@@ -219,7 +219,7 @@ export function contentRouter(analysis: AnalysisClient, maxUploadMb: number) {
         edits.push({ start: rw.start, end: rw.end, replacement: rw.text, label: `rewrite ${key}` });
       }
       if (!edits.length) throw conflict("There are no accepted or edited fixes to apply");
-      newBody = applyEdits(latest.body, edits);
+      newBody = applyEdits(latest.body, latestChoiceWins(edits));
     }
     if (newBody === latest.body) throw conflict("The new version is identical to the current one");
 

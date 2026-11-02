@@ -37,6 +37,17 @@ def test_demo_caption_from_the_plan(kit, settings):
     assert res.ai_status == "disabled"
 
 
+def test_no_capitals_fix_when_the_word_itself_must_go(kit, settings):
+    # "MIRACLE" -> "miracle" would leave the hype word, and clash with any fix for it.
+    res = analyze(make_request(kit, "Our Calm Barrier Cream is a MIRACLE, now just ₹549."), None, None, settings)
+    caps = next(f for f in res.findings if f.source.code == "R-8")
+    assert caps.fix is None
+    assert "fixes this too" in caps.explanation
+    # Capitals on their own still get the lower-case fix.
+    res = analyze(make_request(kit, "Our Calm Barrier Moisturiser is GENTLE on dry skin."), None, None, settings)
+    assert next(f for f in res.findings if f.source.code == "R-8").fix.replacement == "gentle"
+
+
 def test_numbers_are_only_compared_in_context(kit, settings):
     # A figure about something else is not checked against a product fact.
     res = analyze(make_request(kit, "Northfern has 100,000 customers. Calm Barrier Moisturiser is ₹549."), None, None, settings)

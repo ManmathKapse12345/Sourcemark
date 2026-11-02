@@ -92,3 +92,23 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding],
             continue
         kept_ai.append(a)
     return rule_findings + kept_ai, merged
+
+
+def drop_dead_end_fixes(findings: list[Finding], text: str) -> None:
+    """Removes a fix that only changes capitals when another problem sits on the same words.
+
+    "MIRACLE" breaks both the capitals rule and the hype-word rule. Lowering it to "miracle" leaves
+    the hype word in place, and both fixes change the same text, so the writer could apply only one.
+    The other finding's fix (or a rewrite) settles both problems.
+    """
+    for f in findings:
+        if f.fix is None:
+            continue
+        before = text[f.fix.start:f.fix.end]
+        if f.fix.replacement == before or f.fix.replacement.casefold() != before.casefold():
+            continue
+        if any(g is not f and g.kind == "violation" and g.span and f.fix.start <= g.span[0] and g.span[1] <= f.fix.end
+               and not (g.fix and g.fix.replacement.casefold() == text[g.fix.start:g.fix.end].casefold())
+               for g in findings):
+            f.fix = None
+            f.explanation = f"{f.explanation} Fixing the other problem on these words fixes this too."
