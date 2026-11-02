@@ -36,7 +36,7 @@ npm run dev:web                      # http://localhost:3000
 | `/` | member | Dashboard, different per role: **Creator** sees what is waiting on them; **Reviewer** what to review; **Approver** what needs sign-off; **Admin** a workspace overview with brand-kit counts and links. All roles get the filterable list of all content below. |
 | `/content/new` | Creator | Paste text or upload DOCX/PDF/TXT; option to run rule checks only. Shows channel hints from the workspace's disclosure rules (for example "start creator posts with #ad"). Other roles see an explanation instead. |
 | `/content/:id` | member | Review screen (below). |
-| `/brand-kit` | member (edits: Admin) | Guidelines (upload or paste, review and edit clauses, publish, start a new version, suggest rules), rules (create, change severity, switch on/off), facts (add, switch off, show old values), assets. Tabs are linkable: `/brand-kit?tab=Rules`. |
+| `/brand-kit` | member (edits: Admin) | Guidelines (upload or paste, review and edit clauses, publish, start a new version, suggest rules), rules (create, edit settings, change severity, switch on/off), facts (add, switch off, show old values), assets. Tabs are linkable: `/brand-kit?tab=Rules`. |
 | `/guideline-health` | Admin | Ranked clause health, challenge cases, clearer wording suggestions, and draft-version saving. |
 | `/team` | Admin | Add members by email, change roles. |
 | `/audit` | Admin | Organisation-wide audit log. |
@@ -153,7 +153,6 @@ suggestions. Suggestions remain editable and save into the existing Brand Kit dr
 
 ## Known gaps
 
-- Rule configs can be created and switched on or off, but an existing rule's config (for example its word list) can't yet be edited in the UI.
 - "Use this rewrite" and "Suggest rules" need the AI service (`GEMINI_API_KEY`); without it the page explains that.
 - Rule configuration editing is still limited to the fields exposed by the existing controls.
 - A live end-to-end check requires the deployed API, analysis service, database, and seeded workspace.
