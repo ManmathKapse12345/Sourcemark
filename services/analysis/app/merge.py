@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from .contract import Fix
 from .findings import Finding
 from .text import overlaps, sentence_at
 
@@ -69,6 +70,10 @@ def _same_problem(a: Finding, b: Finding, sents: Sequence[tuple[int, int]] = ())
     return (a.grounding is not None and a.grounding == b.grounding) or a.category == b.category
 
 
+def _only_recases(fix: Fix, f: Finding) -> bool:
+    return (fix.start, fix.end) == f.span and fix.replacement.casefold() == f.quote.casefold()
+
+
 def merge(rule_findings: list[Finding], ai_findings: list[Finding],
           sents: Sequence[tuple[int, int]] = ()) -> tuple[list[Finding], int]:
     merged = 0
@@ -83,7 +88,9 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding],
             # The AI often names more of the problem than the rule does ("in 7 days" next to "guaranteed").
             if a.kind == "violation" and a.explanation:
                 target.explanation = _add_explanation(target.explanation, a.explanation)
-            if target.fix is None and a.fix is not None:
+            # A rule without a fix flags the words themselves (a banned term): changing only their
+            # capitals ("GUARANTEED" -> "guaranteed") leaves the problem, so that fix is not taken.
+            if target.fix is None and a.fix is not None and not _only_recases(a.fix, target):
                 target.fix = a.fix
             merged += 1
             continue

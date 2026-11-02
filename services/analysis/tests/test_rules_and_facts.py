@@ -4,7 +4,9 @@ import json
 
 from conftest import REPO, make_request
 
-from app.contract import ExtractedClause
+from app.contract import ExtractedClause, Fix
+from app.findings import Finding
+from app.merge import merge
 from app.parsing import extract_clauses
 from app.pipeline import analyze
 from app.text import sentence_spans
@@ -46,6 +48,18 @@ def test_no_capitals_fix_when_the_word_itself_must_go(kit, settings):
     # Capitals on their own still get the lower-case fix.
     res = analyze(make_request(kit, "Our Calm Barrier Moisturiser is GENTLE on dry skin."), None, None, settings)
     assert next(f for f in res.findings if f.source.code == "R-8").fix.replacement == "gentle"
+
+
+def test_ai_fix_that_only_lowers_a_banned_word_is_not_taken(kit, settings):
+    text = "It's GUARANTEED to work."
+    banned = next(f for f in analyze(make_request(kit, text), None, None, settings).findings if f.source.code == "R-3")
+    rule = Finding(kind="violation", category="claim", severity="high", origins=["rule"], start=banned.span.start,
+                   end=banned.span.end, quote=banned.quote, explanation=banned.explanation, source=banned.source)
+    ai = Finding(kind="violation", category="claim", severity="high", origins=["ai"], start=5, end=15,
+                 quote="GUARANTEED", explanation="Results cannot be guaranteed.", source=banned.source,
+                 fix=Fix(start=5, end=15, replacement="guaranteed"))
+    merged, _ = merge([rule], [ai])
+    assert merged == [rule] and rule.fix is None and "ai" in rule.origins
 
 
 def test_numbers_are_only_compared_in_context(kit, settings):
