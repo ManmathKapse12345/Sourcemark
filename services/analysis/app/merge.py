@@ -90,7 +90,10 @@ def merge(rule_findings: list[Finding], ai_findings: list[Finding],
                 target.explanation = _add_explanation(target.explanation, a.explanation)
             # A rule without a fix flags the words themselves (a banned term): changing only their
             # capitals ("GUARANTEED" -> "guaranteed") leaves the problem, so that fix is not taken.
-            if target.fix is None and a.fix is not None and not _only_recases(a.fix, target):
+            # Nor is a fix for another guideline anchored on the same words: the AI's fix for a time
+            # promise, put on "fair skin", is no answer to the skin-tone rule.
+            if (target.fix is None and a.fix is not None and not _only_recases(a.fix, target)
+                    and a.grounding == target.grounding):
                 target.fix = a.fix
             merged += 1
             continue

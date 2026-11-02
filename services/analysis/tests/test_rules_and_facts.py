@@ -4,7 +4,7 @@ import json
 
 from conftest import REPO, make_request
 
-from app.contract import ExtractedClause, Fix
+from app.contract import ExtractedClause, FindingSource, Fix
 from app.findings import Finding
 from app.merge import merge
 from app.parsing import extract_clauses
@@ -60,6 +60,24 @@ def test_ai_fix_that_only_lowers_a_banned_word_is_not_taken(kit, settings):
                  fix=Fix(start=5, end=15, replacement="guaranteed"))
     merged, _ = merge([rule], [ai])
     assert merged == [rule] and rule.fix is None and "ai" in rule.origins
+
+
+def test_ai_fix_for_another_guideline_is_not_put_on_a_rule(kit, settings):
+    # The AI anchored a time promise (G-3.6) on "fair skin", flagged by the skin-tone rule (G-5.2).
+    text = "It gives you fair skin in a week."
+    found = next(f for f in analyze(make_request(kit, text), None, None, settings).findings if f.source.code == "R-2")
+    rule = Finding(kind="violation", category="inclusivity", severity="high", origins=["rule"], start=found.span.start,
+                   end=found.span.end, quote=found.quote, explanation=found.explanation, source=found.source)
+    ai = Finding(kind="violation", category="claim", severity="high", origins=["ai"], start=12, end=21,
+                 quote="fair skin", explanation="Do not promise results within a time.",
+                 source=FindingSource(type="clause", code="G-3.6", clause_code=None, text="..."),
+                 fix=Fix(start=12, end=21, replacement="results in a week"))
+    merge([rule], [ai])
+    assert rule.fix is None
+    # The same guideline's fix is still taken.
+    ai.source = rule.source
+    merge([rule], [ai])
+    assert rule.fix.replacement == "results in a week"
 
 
 def test_numbers_are_only_compared_in_context(kit, settings):
