@@ -89,7 +89,12 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
 
       {canRespond && !closed && (!last || changing) && (mode === null ? (
         <div className="flex flex-wrap gap-2">
-          {f.fixReplacement != null && <button className="btn-primary" disabled={respond.isPending} onClick={() => respond.mutate({ action: "ACCEPT" })}>Use this fix</button>}
+          {f.fixReplacement != null && (imagePost ? (
+            <div className="flex flex-col items-start gap-1">
+              <button className="btn-primary" disabled={respond.isPending} onClick={() => respond.mutate({ action: "ACCEPT" })}>Mark {f.fixReplacement || "(remove)"} as the fix</button>
+              <p className="text-xs text-slate-500">Change the image, then upload it</p>
+            </div>
+          ) : <button className="btn-primary" disabled={respond.isPending} onClick={() => respond.mutate({ action: "ACCEPT" })}>Use this fix</button>)}
           {hasTextSpan && <button className="btn-secondary" onClick={() => setMode("edit")}>Write my own</button>}
           {imagePost && missingAltText && onEditAltText && <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); onEditAltText(); }}>Edit alt text</button>}
           <button className="btn-secondary" onClick={() => { setText(""); setMode("dispute"); }}>This is wrong</button>
