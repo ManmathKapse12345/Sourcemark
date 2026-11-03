@@ -8,7 +8,9 @@ export function Verdict({ d }: { d: ContentDetail }) {
   const problems = open.filter((f) => f.kind === "violation").length;
   const checks = open.filter((f) => f.kind === "needs_human_check").length;
   const total = problems + checks + d.closedFindingCount;
-  const solved = total === 0 ? 1 : d.closedFindingCount / total;
+  const unchecked = !d.latestRun;
+  const solved = total === 0 ? (unchecked ? 0 : 1) : d.closedFindingCount / total;
+  const percent = Math.round(solved * 100);
   const state = d.item.state;
 
   const broken = d.latestRun?.status === "FAILED";
@@ -16,6 +18,7 @@ export function Verdict({ d }: { d: ContentDetail }) {
   const tone =
     state === "APPROVED" ? { c: "green", h: "Approved. Safe to publish.", p: "A person signed this off and every issue was resolved." }
     : state === "REJECTED" ? { c: "red", h: "Rejected. Do not publish.", p: "An approver decided this content should not go out." }
+    : unchecked ? { c: "amber", h: "Not checked yet", p: "Submit it to check it against your guidelines." }
     : broken ? { c: "amber", h: "The check didn’t finish", p: "Results below may be incomplete. Re-check before sending it on." }
     : problems > 0 ? { c: "red", h: "Not ready to publish yet", p: `${problems} ${problems === 1 ? "problem breaks" : "problems break"} your guidelines or facts. Fix them, then send it on.` }
     : checks > 0 ? { c: "amber", h: "Almost there", p: `${checks} ${checks === 1 ? "item needs" : "items need"} a person to confirm before this goes out.` }
@@ -26,11 +29,11 @@ export function Verdict({ d }: { d: ContentDetail }) {
   return (
     <section className="card space-y-5 !p-5">
       <div className="flex flex-wrap items-center gap-5">
-        <svg width="76" height="76" viewBox="0 0 76 76" role="img" aria-label={`${Math.round(solved * 100)}% of issues resolved`}>
+        <svg width="76" height="76" viewBox="0 0 76 76" role="img" aria-label={unchecked ? "Not checked yet" : `${percent}% of issues resolved`}>
           <circle cx="38" cy="38" r={R} fill="none" stroke="var(--color-slate-200)" strokeWidth="7" />
           <circle cx="38" cy="38" r={R} fill="none" stroke={ring} strokeWidth="7" strokeLinecap="round"
             strokeDasharray={C} strokeDashoffset={C * (1 - solved)} transform="rotate(-90 38 38)" />
-          <text x="38" y="43" textAnchor="middle" fontSize="16" fontWeight="600" fill="currentColor">{Math.round(solved * 100)}%</text>
+          <text x="38" y="43" textAnchor="middle" fontSize="16" fontWeight="600" fill="currentColor">{unchecked ? "–" : `${percent}%`}</text>
         </svg>
         <div className="min-w-0 flex-1">
           <h2 className="display text-2xl">{tone.h}</h2>
