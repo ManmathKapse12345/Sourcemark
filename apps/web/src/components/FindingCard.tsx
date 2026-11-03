@@ -9,8 +9,8 @@ import { sentencePreview } from "@/lib/diff";
 const SOURCE_LABEL: Record<string, string> = { rule: "Your brand rule", clause: "Your guideline says", fact: "Your approved fact sheet says", asset: "Brand asset", standard: "Accessibility" };
 const CATEGORY: Record<string, string> = { terminology: "Wording", fact: "Facts & prices", claim: "Claim", tone: "Tone", style: "Style", readability: "Readability", disclosure: "Disclosure", inclusivity: "Inclusive language", visual: "Visual", accessibility: "Accessibility" };
 
-export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false, imagePost = false }: {
-  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean; imagePost?: boolean;
+export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false, imagePost = false, canUndo = false, clashes = false }: {
+  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean; imagePost?: boolean; canUndo?: boolean; clashes?: boolean;
 }) {
   const orgApi = useOrgApi();
   const qc = useQueryClient();
@@ -19,6 +19,10 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
   const respond = useMutation({
     mutationFn: (body: object) => orgApi(`/findings/${f.id}/responses`, { body }),
     onSuccess: () => { setMode(null); setChanging(false); void qc.invalidateQueries({ queryKey: ["content-detail", contentId] }); },
+  });
+  const undo = useMutation({
+    mutationFn: () => orgApi(`/findings/${f.id}/responses/latest`, { method: "DELETE" }),
+    onSuccess: () => { setChanging(false); void qc.invalidateQueries({ queryKey: ["content-detail", contentId] }); },
   });
   const last = f.responses.at(-1);
   const disputed = last?.action === "DISPUTE";
@@ -59,6 +63,13 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
         </div>
       )}
 
+      {clashes && <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-800">This changes the same words as another fix.</p>}
+      {f.fixReplacement != null && !f.quote && f.category === "disclosure" && (
+        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+          <span className="text-slate-500">Suggested fix:</span> Add at the start: <span className="rounded bg-green-100 px-1.5 font-medium text-green-800">{f.fixReplacement}</span>
+        </div>
+      )}
+
       {f.sourceText && (
         <div className="rounded-lg border border-slate-200 p-2.5 text-xs">
           <p className="mb-0.5 font-medium text-slate-600">{SOURCE_LABEL[f.sourceType ?? "rule"]} <span className="font-mono text-brand">{f.sourceCode}</span></p>
@@ -70,7 +81,7 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
         <div className="flex items-center gap-2 rounded-lg bg-green-100/60 px-3 py-2 text-sm text-green-800">
           <span aria-hidden>✓</span>
           <span className="min-w-0 flex-1">{last.action === "ACCEPT" ? "Fix chosen" : last.action === "EDIT" ? `Your wording: “${last.editedText}”` : `Disputed: ${last.reason}`}</span>
-          {canRespond && !closed && <button className="text-xs underline" onClick={(e) => { e.stopPropagation(); setChanging(true); }}>Change</button>}
+          {canRespond && !closed && <div className="flex items-center gap-3">{canUndo && <button className="text-xs underline" disabled={undo.isPending} onClick={(e) => { e.stopPropagation(); undo.mutate(); }}>Undo</button>}<button className="text-xs underline" onClick={(e) => { e.stopPropagation(); setChanging(true); }}>Change</button></div>}
         </div>
       )}
 
@@ -93,7 +104,7 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
           <div className="flex gap-2"><button className="btn-primary" disabled={respond.isPending}>Save</button><button type="button" className="btn-secondary" onClick={() => setMode(null)}>Cancel</button></div>
         </form>
       ))}
-      <ErrorNote error={respond.error} />
+      <ErrorNote error={respond.error ?? undo.error} />
     </div>
   );
 }

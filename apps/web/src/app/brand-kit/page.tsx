@@ -205,6 +205,7 @@ function SuggestRules({ versionId }: { versionId: string }) {
 
 function Rules() {
   const { orgId, admin, orgApi, invalidate } = useKit();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["rules", orgId], queryFn: () => orgApi<{ rules: (Rule & { config: Record<string, unknown> })[] }>("/rules") });
   const patch = useMutation({ mutationFn: ({ id, body }: { id: string; body: object }) => orgApi(`/rules/${id}`, { method: "PATCH", body }), onSuccess: () => invalidate("rules") });
   return (
@@ -214,22 +215,89 @@ function Rules() {
       {q.isLoading ? <Loading /> : !q.data?.rules.length ? <Empty>No rules yet.</Empty> : (
         <ul className="card divide-y divide-slate-200 !p-0">
           {q.data.rules.map((r) => (
-            <li key={r.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${r.active ? "" : "opacity-60"}`}>
-              <span className="w-10 font-mono text-xs text-brand">{r.code}</span>
-              <span className="min-w-0 flex-1">{r.message} <span className="text-xs text-slate-500">· {RULE_LABEL[r.type] ?? r.type}{r.clauseCode ? ` · from ${r.clauseCode}` : ""}</span></span>
-              {admin ? (
-                <select className="input !w-auto !py-1 text-xs" value={r.severity} aria-label={`Severity of ${r.code}`} onChange={(e) => patch.mutate({ id: r.id, body: { severity: e.target.value } })}>
-                  {Severity.options.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              ) : <SeverityBadge s={r.severity} />}
-              {admin ? (
-                <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={r.active} onChange={(e) => patch.mutate({ id: r.id, body: { active: e.target.checked } })} /> On</label>
-              ) : !r.active && <Badge className="bg-slate-200">off</Badge>}
-            </li>
+            editingId === r.id ? (
+              <li key={r.id} className="px-4 py-3"><EditRule r={r} onCancel={() => setEditingId(null)} onSaved={() => { setEditingId(null); void invalidate("rules"); }} /></li>
+            ) : (
+              <li key={r.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${r.active ? "" : "opacity-60"}`}>
+                <span className="w-10 font-mono text-xs text-brand">{r.code}</span>
+                <span className="min-w-0 flex-1">{r.message} <span className="text-xs text-slate-500">· {RULE_LABEL[r.type] ?? r.type}{r.clauseCode ? ` · from ${r.clauseCode}` : ""}</span></span>
+                {admin ? (
+                  <>
+                    <select className="input !w-auto !py-1 text-xs" value={r.severity} aria-label={`Severity of ${r.code}`} onChange={(e) => patch.mutate({ id: r.id, body: { severity: e.target.value } })}>
+                      {Severity.options.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                    <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={r.active} onChange={(e) => patch.mutate({ id: r.id, body: { active: e.target.checked } })} /> On</label>
+                    <button className="btn-secondary !py-1 !text-xs" onClick={() => setEditingId(r.id)}>Edit settings</button>
+                  </>
+                ) : <SeverityBadge s={r.severity} />}
+                {!admin && !r.active && <Badge className="bg-slate-200">off</Badge>}
+              </li>
+            )
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function EditRule({ r, onCancel, onSaved }: { r: Rule & { config: Record<string, unknown> }; onCancel: () => void; onSaved: () => void }) {
+  const { orgApi } = useKit();
+  const [message, setMessage] = useState(r.message);
+  const [clauseCode, setClauseCode] = useState(r.clauseCode ?? "");
+  const [severity, setSeverity] = useState(r.severity);
+  const [config, setConfig] = useState<Record<string, unknown>>({ ...r.config });
+  const [validation, setValidation] = useState("");
+  const set = (key: string, value: unknown) => setConfig((old) => ({ ...old, [key]: value }));
+  const listText = (key: string) => Array.isArray(config[key]) ? (config[key] as unknown[]).join(", ") : "";
+  const setList = (key: string, value: string) => set(key, csv(value));
+  const numberValue = (key: string, fallback: number) => Number(config[key] ?? fallback);
+  const save = useMutation({
+    mutationFn: () => orgApi(`/rules/${r.id}`, { method: "PATCH", body: { message, clauseCode: clauseCode.trim() || null, severity, config } }),
+    onSuccess: onSaved,
+  });
+  const isDisclosure = r.type === "required_disclosure";
+  return (
+    <form className="space-y-3 text-sm" onSubmit={(e) => {
+      e.preventDefault();
+      if (isDisclosure && (!Array.isArray(config.channels) || config.channels.length === 0)) {
+        setValidation("Choose at least one channel for this disclosure rule.");
+        return;
+      }
+      setValidation("");
+      save.mutate();
+    }}>
+      <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-brand">{r.code}</span><b>Edit rule settings</b></div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 sm:col-span-2"><span>Message people will see</span><input className="input" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={500} required /></label>
+        <label className="space-y-1"><span>Severity</span><select className="input" value={severity} onChange={(e) => setSeverity(e.target.value as typeof r.severity)}>{Severity.options.map((s) => <option key={s}>{s}</option>)}</select></label>
+        <label className="space-y-1"><span>Guideline clause (optional)</span><input className="input" value={clauseCode} onChange={(e) => setClauseCode(e.target.value)} placeholder="e.g. G-2.1" /></label>
+
+        {r.type === "banned_term" && <>
+          <label className="space-y-1"><span>Banned words, comma separated</span><input className="input" value={listText("terms")} onChange={(e) => setList("terms", e.target.value)} required /></label>
+          <label className="space-y-1"><span>Suggested replacement (optional)</span><input className="input" value={String(config.replacement ?? "")} onChange={(e) => set("replacement", e.target.value || null)} /></label>
+        </>}
+        {r.type === "terminology" && <>
+          <label className="space-y-1"><span>Preferred name</span><input className="input" value={String(config.preferred ?? "")} onChange={(e) => set("preferred", e.target.value)} required /></label>
+          <label className="space-y-1"><span>Wrong variants, comma separated</span><input className="input" value={listText("variants")} onChange={(e) => setList("variants", e.target.value)} /></label>
+        </>}
+        {r.type === "all_caps" && <label className="space-y-1"><span>Allowed acronyms, comma separated</span><input className="input" value={listText("allow")} onChange={(e) => setList("allow", e.target.value)} /></label>}
+        {r.type === "punctuation" && <label className="space-y-1"><span>Most exclamation marks allowed per post</span><input className="input" type="number" min={0} step={1} value={numberValue("max_exclamations", 1)} onChange={(e) => set("max_exclamations", Number(e.target.value))} required /></label>}
+        {r.type === "long_sentence" && <label className="space-y-1"><span>Most words per sentence</span><input className="input" type="number" min={5} step={1} value={numberValue("max_words", 30)} onChange={(e) => set("max_words", Number(e.target.value))} required /></label>}
+        {isDisclosure && <>
+          <label className="space-y-1 sm:col-span-2"><span>Accepted tags, comma separated</span><input className="input" value={listText("any_of")} onChange={(e) => setList("any_of", e.target.value)} required /></label>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 sm:col-span-2">
+            {Channel.options.map((c) => <label key={c} className="flex items-center gap-1.5"><input type="checkbox" checked={Array.isArray(config.channels) && config.channels.includes(c)} onChange={() => {
+              const channels = Array.isArray(config.channels) ? config.channels as string[] : [];
+              set("channels", channels.includes(c) ? channels.filter((x) => x !== c) : [...channels, c]);
+            }} /> {c.replace("_", " ")}</label>)}
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={config.at_start !== false} onChange={(e) => set("at_start", e.target.checked)} /> Must be at the start</label>
+          </div>
+        </>}
+      </div>
+      {validation && <p className="text-sm text-red-700">{validation}</p>}
+      <ErrorNote error={save.error} />
+      <div className="flex gap-2"><button className="btn-primary" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save settings"}</button><button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button></div>
+    </form>
   );
 }
 

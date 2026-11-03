@@ -192,7 +192,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
               {editable && !imagePost && (
                 <button className="btn-secondary" disabled={newVersion.isPending} onClick={() => newVersion.mutate({ applyResponses: true })}>Apply accepted fixes as new version</button>
               )}
-              {!d.availableActions.length && <p className="text-sm text-slate-500">{d.item.state === "APPROVED" ? "Nothing left to do. This content is approved and ready to publish." : d.item.state === "REJECTED" ? "This content was rejected and is closed." : "Nothing for you to do right now. It is with someone else."}</p>}
+              {!d.availableActions.length && <p className="text-sm text-slate-500">{d.item.state === "APPROVED" ? "Nothing left to do. This content is approved and ready to publish." : d.item.state === "REJECTED" ? "This post was rejected and is closed. Start a new post if you want to try again." : "Nothing for you to do right now. It is with someone else."}</p>}
             </div>
             <ErrorNote error={transition.error ?? (draft === null ? newVersion.error : null)} />
             {open > 0 && editable && <p className="text-sm text-slate-500">Choose a fix for each problem and press “Apply accepted fixes as new version”, or use “Edit the text”. Sourcemark re-checks the new version, and problems close only when they are really gone.</p>}
@@ -256,7 +256,13 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
           )}
           {findings.map((f) => (
             <FindingCard key={f.id} f={f} body={version.body} active={active === f.id} canRespond={canRespond} contentId={id}
-              showDispute={!isAuthor} imagePost={imagePost} onSelect={() => setActive(f.id)} />
+              showDispute={!isAuthor} imagePost={imagePost} canUndo={f.responses.at(-1)?.memberId === memberId} clashes={f.fixReplacement != null && findings.some((other) => {
+                if (other.id === f.id) return false;
+                if (other.fixReplacement == null) return false;
+                const start = f.fixStart ?? f.spanStart, end = f.fixEnd ?? f.spanEnd;
+                const otherStart = other.fixStart ?? other.spanStart, otherEnd = other.fixEnd ?? other.spanEnd;
+                return start != null && end != null && otherStart != null && otherEnd != null && start < otherEnd && otherStart < end;
+              })} onSelect={() => setActive(f.id)} />
           ))}
         </aside>
       </div>
