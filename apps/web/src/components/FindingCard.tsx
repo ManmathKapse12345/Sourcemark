@@ -9,8 +9,8 @@ import { sentencePreview } from "@/lib/diff";
 const SOURCE_LABEL: Record<string, string> = { rule: "Your brand rule", clause: "Your guideline says", fact: "Your approved fact sheet says", asset: "Brand asset", standard: "Accessibility" };
 const CATEGORY: Record<string, string> = { terminology: "Wording", fact: "Facts & prices", claim: "Claim", tone: "Tone", style: "Style", readability: "Readability", disclosure: "Disclosure", inclusivity: "Inclusive language", visual: "Visual", accessibility: "Accessibility" };
 
-export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false, imagePost = false, canUndo = false, clashes = false }: {
-  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean; imagePost?: boolean; canUndo?: boolean; clashes?: boolean;
+export function FindingCard({ f, body, active, canRespond, contentId, onSelect, showDispute = false, imagePost = false, canUndo = false, clashes = false, onEditAltText }: {
+  f: Finding; body: string; active: boolean; canRespond: boolean; contentId: string; onSelect: () => void; showDispute?: boolean; imagePost?: boolean; canUndo?: boolean; clashes?: boolean; onEditAltText?: () => void;
 }) {
   const orgApi = useOrgApi();
   const qc = useQueryClient();
@@ -26,6 +26,8 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
   });
   const last = f.responses.at(-1);
   const disputed = last?.action === "DISPUTE";
+  const hasTextSpan = f.spanStart != null && f.spanEnd != null;
+  const missingAltText = f.sourceCode === "WCAG-1.1.1";
   const span = f.fixStart != null && f.fixEnd != null ? [f.fixStart, f.fixEnd] : f.spanStart != null && f.spanEnd != null ? [f.spanStart, f.spanEnd] : null;
   const preview = mode === "edit" && span ? sentencePreview(body, span[0], span[1], text) : null;
   const needsCheck = f.kind === "needs_human_check";
@@ -88,7 +90,8 @@ export function FindingCard({ f, body, active, canRespond, contentId, onSelect, 
       {canRespond && !closed && (!last || changing) && (mode === null ? (
         <div className="flex flex-wrap gap-2">
           {f.fixReplacement != null && <button className="btn-primary" disabled={respond.isPending} onClick={() => respond.mutate({ action: "ACCEPT" })}>Use this fix</button>}
-          <button className="btn-secondary" onClick={() => setMode("edit")}>Write my own</button>
+          {hasTextSpan && <button className="btn-secondary" onClick={() => setMode("edit")}>Write my own</button>}
+          {imagePost && missingAltText && onEditAltText && <button className="btn-secondary" onClick={(e) => { e.stopPropagation(); onEditAltText(); }}>Edit alt text</button>}
           <button className="btn-secondary" onClick={() => { setText(""); setMode("dispute"); }}>This is wrong</button>
         </div>
       ) : (
