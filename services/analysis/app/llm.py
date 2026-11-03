@@ -75,6 +75,7 @@ class GeminiLLM:
         delay = 2.0
         for attempt in range(1, self.retries + 1):
             _check_budget(what)
+            wait = delay
             try:
                 return fn()
             except errors.APIError as e:
@@ -82,6 +83,8 @@ class GeminiLLM:
                 log.warning("gemini %s failed (attempt %d, code %s): %s", what, attempt, getattr(e, "code", None), e)
                 if not retryable or attempt == self.retries:
                     raise LLMError(f"Gemini {what} failed: {getattr(e, 'code', '')} {getattr(e, 'message', '') or e}".strip()) from e
+                # A rate limit says when its window resets; retrying sooner only fails again.
+                wait = max(delay, server_retry_delay(e))
             except ValidationError as e:
                 log.warning("gemini %s returned invalid JSON (attempt %d): %s", what, attempt, e)
                 if attempt == self.retries:
@@ -90,8 +93,8 @@ class GeminiLLM:
                 log.warning("gemini %s error (attempt %d): %s", what, attempt, e)
                 if attempt == self.retries:
                     raise LLMError(f"Gemini {what} failed: {e}") from e
-            _check_budget(what, delay)
-            time.sleep(delay)
+            _check_budget(what, wait)
+            time.sleep(wait)
             delay *= 2
 
     def generate_json(self, system: str, prompt: str, schema: type[T]) -> T:
@@ -133,6 +136,19 @@ class GeminiLLM:
             ))
             vectors.extend(_unit(e.values) for e in resp.embeddings)
         return vectors
+
+
+def server_retry_delay(e: Exception) -> float:
+    """Seconds the API asks the caller to wait (RetryInfo.retryDelay, e.g. "44s"), or 0 if it gives none."""
+    details = getattr(e, "details", None)
+    error = details.get("error", details) if isinstance(details, dict) else {}
+    for d in error.get("details", []) if isinstance(error, dict) else []:
+        if isinstance(d, dict) and str(d.get("@type", "")).endswith("RetryInfo"):
+            try:
+                return float(str(d.get("retryDelay", "")).rstrip("s"))
+            except ValueError:
+                return 0.0
+    return 0.0
 
 
 def _unit(v) -> list[float]:
