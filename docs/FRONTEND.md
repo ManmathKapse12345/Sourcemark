@@ -59,7 +59,8 @@ visitor is sent to `/welcome`; a signed-in user without an organisation is sent 
 3. **Findings** (`components/FindingCard.tsx`): plain words ("Problem", "Please confirm"), the fix as
    *before → after*, the cited rule or fact with its code (R-4, F-2, G-3.2), and who found it (rule, AI, or both).
    Answers: **Use this fix**, **Write my own** (with a live preview of the whole sentence, so people type only the
-   replacement words), **This is wrong**. After answering, the card shows the choice and a *Change* link. Reviewers see
+   replacement words), **This is wrong**. Image findings without a text span hide **Write my own**; a missing-alt-text
+   finding opens the alt-text editor. After answering, the card shows the choice and a *Change* link. Reviewers see
    disputed findings highlighted with the writer's reason.
    Suggested rewrites have a **Use this rewrite** button (`applyRewriteIds`).
 4. **Actions**: only what the API lists in `availableActions`, in plain words ("Send to approver",
@@ -146,6 +147,7 @@ the two Supabase variables. Add the Vercel domain to the API's `CORS_ORIGINS`. I
 Image posts accept PNG, JPEG and WebP uploads, optional alt text, authenticated image previews, finding boxes,
 OCR text highlights, image version comparison, asset/logo citations, and notes for skipped checks. Image versions
 are changed through “Edit alt text” or “Upload a new image”; text rewrites are intentionally not applied to images.
+Image-post findings give image-specific guidance and only offer a text edit when the finding has a text span.
 The review screen shows Hindi/Hinglish detection and uses a Devanagari-capable font fallback.
 
 Admins can open `/guideline-health` to see ranked clauses, decision cases, challenge rates, and clearer-wording

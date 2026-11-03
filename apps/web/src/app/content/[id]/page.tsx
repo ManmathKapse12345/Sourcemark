@@ -132,7 +132,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
               <ImageReview orgId={orgId!} contentId={id} versionId={version.id} findings={findings} activeId={active} onSelect={select} />
               {run?.ocrText && <div className="border-t border-slate-200 pt-4" lang={run.stats?.language === "hi" ? "hi" : undefined}><p className="mb-2 text-xs font-medium text-slate-500">Text read from the image</p><HighlightedBody body={run.ocrText} findings={findings} activeId={active} onSelect={select} /></div>}
               {editable && <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3"><button className="btn-secondary" onClick={() => setAltDraft(version.altText ?? "")}>Edit alt text</button><label className="btn-secondary cursor-pointer">Upload a new image<input className="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp" onChange={(e) => { const f = e.target.files?.[0] ?? null; setReplacementImage(f); if (f) { const fd = new FormData(); fd.append("file", f); newVersion.mutate(fd); } }} /></label></div>}
-              {altDraft !== null && <div className="space-y-2"><textarea className="input" value={altDraft} onChange={(e) => setAltDraft(e.target.value)} placeholder="Describe the image for people using screen readers" /><div className="flex gap-2"><button className="btn-primary" disabled={newVersion.isPending} onClick={() => newVersion.mutate({ altText: altDraft })}>Save alt text</button><button className="btn-secondary" onClick={() => setAltDraft(null)}>Cancel</button></div></div>}
+              {altDraft !== null && <div id="alt-text-editor" className="space-y-2"><label htmlFor="alt-text-input" className="text-sm font-medium">Edit alt text</label><textarea id="alt-text-input" className="input" value={altDraft} onChange={(e) => setAltDraft(e.target.value)} placeholder="Describe the image for people using screen readers" /><div className="flex gap-2"><button className="btn-primary" disabled={newVersion.isPending} onClick={() => newVersion.mutate({ altText: altDraft })}>Save alt text</button><button className="btn-secondary" onClick={() => setAltDraft(null)}>Cancel</button></div></div>}
               {replacementImage && newVersion.isPending && <p className="text-xs text-slate-500">Uploading the new image and running checks…</p>}
               <ErrorNote error={newVersion.error} />
             </div>
@@ -195,7 +195,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
               {!d.availableActions.length && <p className="text-sm text-slate-500">{d.item.state === "APPROVED" ? "Nothing left to do. This content is approved and ready to publish." : d.item.state === "REJECTED" ? "This post was rejected and is closed. Start a new post if you want to try again." : "Nothing for you to do right now. It is with someone else."}</p>}
             </div>
             <ErrorNote error={transition.error ?? (draft === null ? newVersion.error : null)} />
-            {open > 0 && editable && <p className="text-sm text-slate-500">Choose a fix for each problem and press “Apply accepted fixes as new version”, or use “Edit the text”. Sourcemark re-checks the new version, and problems close only when they are really gone.</p>}
+            {open > 0 && editable && <p className="text-sm text-slate-500">{imagePost ? "For missing alt text, use Edit alt text. For colour, logo, or other image issues, upload a corrected image. Sourcemark checks each new version." : "Choose a fix for each problem and press “Apply accepted fixes as new version”, or use “Edit the text”. Sourcemark re-checks the new version, and problems close only when they are really gone."}</p>}
           </div>
 
           <div className="card space-y-3">
@@ -262,7 +262,10 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                 const start = f.fixStart ?? f.spanStart, end = f.fixEnd ?? f.spanEnd;
                 const otherStart = other.fixStart ?? other.spanStart, otherEnd = other.fixEnd ?? other.spanEnd;
                 return start != null && end != null && otherStart != null && otherEnd != null && start < otherEnd && otherStart < end;
-              })} onSelect={() => setActive(f.id)} />
+              })} onEditAltText={imagePost && editable && f.sourceCode === "WCAG-1.1.1" ? () => {
+                setAltDraft(version.altText ?? "");
+                requestAnimationFrame(() => document.getElementById("alt-text-editor")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+              } : undefined} onSelect={() => setActive(f.id)} />
           ))}
         </aside>
       </div>
