@@ -6,7 +6,7 @@ import time
 
 from conftest import FakeLLM, make_request
 
-from app.llm import GeminiLLM, LLMError, time_budget
+from app.llm import GeminiLLM, LLMError, server_retry_delay, time_budget
 from app.pipeline import analyze
 from app.retrieval import InMemoryRetriever
 
@@ -232,3 +232,41 @@ def test_retries_stop_when_the_wait_would_outlast_the_budget():
         except LLMError as e:
             assert "time budget" in str(e)
     assert time.monotonic() - started < 0.5
+
+
+def rate_limited(retry_delay: str):
+    from google.genai import errors
+
+    return errors.APIError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "quota", "details": [
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay}]}})
+
+
+def test_rate_limit_waits_as_long_as_the_server_asks(monkeypatch):
+    waits = []
+    monkeypatch.setattr("app.llm.time.sleep", waits.append)
+    attempts = iter([rate_limited("44s"), None])
+
+    def call():
+        e = next(attempts)
+        if e:
+            raise e
+        return "ok"
+
+    assert bare_gemini()._with_retries("generation", call) == "ok"
+    assert waits == [44.0]
+    assert server_retry_delay(rate_limited("not a duration")) == 0.0
+    assert server_retry_delay(TimeoutError()) == 0.0
+
+
+def test_rate_limit_wait_still_respects_the_budget(monkeypatch):
+    monkeypatch.setattr("app.llm.time.sleep", lambda s: None)
+
+    def call():
+        raise rate_limited("44s")
+
+    with time_budget(30):  # 44 s does not fit, so the review falls back to rule checks at once
+        try:
+            bare_gemini()._with_retries("generation", call)
+            raise AssertionError("expected LLMError")
+        except LLMError as e:
+            assert "time budget" in str(e)

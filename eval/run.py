@@ -166,6 +166,7 @@ def main() -> None:
         durations.append(res.stats.duration_ms)
         if use_ai and res.ai_status != "ok":
             ai_failures += 1
+            print(f"{t['id']}: AI {res.ai_status}: {res.ai_error}")
         violations = [f for f in res.findings if f.kind == "violation"]
         nhc += sum(1 for f in res.findings if f.kind == "needs_human_check")
         invalid_citations += sum(1 for f in violations if not citation_valid(f, kit))
@@ -199,6 +200,7 @@ def main() -> None:
         pieces.append({
             "id": t["id"],
             "ai_status": res.ai_status,
+            "ai_error": res.ai_error,
             "missed": missed,
             "false_alarms": [f.model_dump() for f in false_alarms],
             "findings": [f.model_dump() for f in res.findings],
@@ -289,6 +291,7 @@ def run_images(tests: list[dict], kit: BrandKit, cfg: Settings, llm, retriever, 
         durations.append(res.stats.duration_ms)
         if use_ai and res.ai_status != "ok":
             ai_failures += 1
+            print(f"{t['id']}: AI {res.ai_status}: {res.ai_error}")
         violations = [f for f in res.findings if f.kind == "violation"]
         nhc += sum(1 for f in res.findings if f.kind == "needs_human_check")
         # Without AI the text in the image is not read, so those labels are out of scope for that run.
@@ -321,7 +324,7 @@ def run_images(tests: list[dict], kit: BrandKit, cfg: Settings, llm, retriever, 
         if not any(not e.get("acceptable") for e in t["expected"]):
             clean_total += 1
             clean_with_alarm += 1 if false_alarms else 0
-        pieces.append({"id": t["id"], "ai_status": res.ai_status, "ocr_text": res.ocr_text, "missed": missed,
+        pieces.append({"id": t["id"], "ai_status": res.ai_status, "ai_error": res.ai_error, "ocr_text": res.ocr_text, "missed": missed,
                        "false_alarms": [f.model_dump() for f in false_alarms], "findings": [f.model_dump() for f in res.findings]})
         if verbose and (missed or false_alarms):
             print(f"\n{t['id']}: {res.ocr_text!r}")
